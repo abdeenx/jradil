@@ -47,16 +47,21 @@ export type ShareInput = {
 };
 
 export function buildShareText(input: ShareInput): string {
-  const lines = [
+  /** The board itself: whose day it was, how it went, and the rows. */
+  const board = [
     `${input.appName} — ${input.dateLabel}`,
     `${input.attempts}/${input.maxAttempts}`,
     shareGrid(input.states),
-    `${NEXT_WORD_LABEL} ${formatDuration(input.msRemaining)}`,
   ];
+
+  /** Housekeeping: what is coming, and where to find it. */
+  const footer = [`${NEXT_WORD_LABEL} ${formatDuration(input.msRemaining)}`];
 
   // A leading mark keeps the address reading left-to-right inside an otherwise
   // right-to-left message, so clients do not reorder its tail.
-  if (input.appUrl) lines.push(`\u200E${input.appUrl}`);
+  if (input.appUrl) footer.push(`\u200E${input.appUrl}`);
 
-  return lines.join("\n");
+  // One blank line apart, so the footer does not crowd the grid — the grid is
+  // the part people actually read.
+  return `${board.join("\n")}\n\n${footer.join("\n")}`;
 }

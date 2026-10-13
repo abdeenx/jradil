@@ -53,14 +53,22 @@ describe("shareGrid", () => {
 });
 
 describe("buildShareText", () => {
-  it("stacks who, how many, the grid, the countdown and the link", () => {
+  it("stacks the board, a gap, then the countdown and the link", () => {
     const lines = buildShareText(BASE).split("\n");
 
     expect(lines[0]).toBe("جرادل — الثلاثاء 13 أكتوبر");
     expect(lines[1]).toBe("3/6");
     expect(lines[2]).toBe("\u200F🪣🟨🫗🪣🟨");
-    expect(lines[3]).toBe("الكلمة القادمة بعد 03:04:09");
-    expect(lines[4]).toBe("\u200Ehttps://jradil.example.com");
+    expect(lines[3]).toBe("");
+    expect(lines[4]).toBe("الكلمة القادمة بعد 03:04:09");
+    expect(lines[5]).toBe("\u200Ehttps://jradil.example.com");
+  });
+
+  it("separates the grid from the footer with exactly one blank line", () => {
+    const text = buildShareText(BASE);
+    expect(text).toContain("🟨\n\nالكلمة القادمة");
+    // Two blank lines would scroll the footer out of a preview card.
+    expect(text).not.toContain("\n\n\n");
   });
 
   it("puts the grid above the countdown, on its own line", () => {
@@ -71,7 +79,7 @@ describe("buildShareText", () => {
   it("leaves the link out when the deployment has no address", () => {
     const text = buildShareText({ ...BASE, appUrl: null });
     expect(text).not.toContain("http");
-    expect(text.split("\n")).toHaveLength(4);
+    expect(text.split("\n")).toHaveLength(5);
   });
 
   it("still shows the countdown when the link is missing", () => {

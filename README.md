@@ -198,6 +198,7 @@ The end-of-game panel copies a summary to the clipboard:
 ‏🫗🟨🫗🫗🫗
 ‏🫗🟨🪣🫗🟨
 ‏🪣🪣🪣🪣🪣
+
 الكلمة القادمة بعد 07:04:09
 ‎https://jradil.example.com
 ```
