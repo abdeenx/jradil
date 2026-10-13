@@ -27,21 +27,204 @@
   --color-secondary-content: oklch(18% 0.03 195);
 }
 
+/*
+  ---------------------------------------------------------------------------
+  The bucket
+  ---------------------------------------------------------------------------
+  Every graphic in the game is a hand-authored SVG path plus these rules. There
+  are no image files, icon fonts or animation libraries involved.
+
+  The palette is derived from daisyUI's semantic colours with `color-mix`, so a
+  bucket keeps its meaning in both themes without a second set of values.
+*/
+:root {
+  /* Empty bucket: a translucent glazed surface with a stronger outline. */
+  --bucket-surface: color-mix(in oklab, var(--color-base-content) 7%, transparent);
+  --bucket-edge: color-mix(in oklab, var(--color-base-content) 32%, transparent);
+
+  /*
+    Clear water. This is what pours in during the fill, before the guess has been
+    read, so the colour of a bucket cannot give the answer away early.
+  */
+  --bucket-water-plain: color-mix(in oklab, var(--color-base-content) 22%, transparent);
+
+  /*
+    The colour each state settles into: blue for a letter in its right place,
+    and two greys for the rest.
+
+    A misplaced letter gets the DARKER grey, so it stays the more noticeable of
+    the two — the letter is in the word, after all. A letter that is not in the
+    word at all gets the lighter grey, and a lighter bucket to match.
+
+    The water for a correct letter is the theme's own blue, so it reads as clean
+    water in both light and dark.
+
+    The two greys are mixed from the same pair, so they stay in step across
+    themes: more `base-content` means further from the page, whichever way round
+    the theme runs. `bucket.test.ts` reads this file and enforces the ordering.
+  */
+  --bucket-water-present: color-mix(in oklab, var(--color-base-content) 62%, var(--color-base-100));
+  --bucket-water-correct: var(--color-info);
+  --bucket-water-gray: color-mix(in oklab, var(--color-base-content) 36%, var(--color-base-100));
+
+  /* The bucket that held a rejected letter: a shade lighter than what it kept. */
+  --bucket-gray-surface: color-mix(in oklab, var(--color-base-content) 16%, var(--color-base-100));
+  --bucket-gray-edge: color-mix(in oklab, var(--color-base-content) 42%, var(--color-base-100));
+}
+
+/* Water rises, decelerating as it reaches the brim. */
+@keyframes bucket-fill {
+  from {
+    transform: translateY(var(--bucket-empty));
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/*
+  The full absent sequence in one animation: rise, hold briefly, then seep down
+  and out through the bottom of the bucket. The held beat at 40–62% is what
+  makes the fill read as a separate, earlier moment than the drain.
+*/
+@keyframes bucket-drain {
+  0% {
+    transform: translateY(var(--bucket-empty));
+  }
+  40% {
+    transform: translateY(0);
+  }
+  62% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(var(--bucket-residue));
+  }
+}
+
+/* The bucket and the water it kept both turn grey as the water falls. */
+@keyframes bucket-gray-body {
+  from {
+    fill: var(--bucket-surface);
+    stroke: var(--bucket-edge);
+  }
+  to {
+    fill: var(--bucket-gray-surface);
+    stroke: var(--bucket-gray-edge);
+  }
+}
+
+/* Each settled colour arrives only after the plain water has finished rising. */
+@keyframes bucket-water-present {
+  from {
+    fill: var(--bucket-water-plain);
+  }
+  to {
+    fill: var(--bucket-water-present);
+  }
+}
+
+@keyframes bucket-water-correct {
+  from {
+    fill: var(--bucket-water-plain);
+  }
+  to {
+    fill: var(--bucket-water-correct);
+  }
+}
+
+@keyframes bucket-water-gray {
+  from {
+    fill: var(--bucket-water-plain);
+  }
+  to {
+    fill: var(--bucket-water-gray);
+  }
+}
+
+/* The letter darkens against whichever colour it ends up sitting in. */
+@keyframes bucket-ink-on-gray {
+  from {
+    fill: var(--color-base-content);
+  }
+  to {
+    fill: var(--color-base-100);
+  }
+}
+
+@keyframes bucket-ink-info {
+  from {
+    fill: var(--color-base-content);
+  }
+  to {
+    fill: var(--color-info-content);
+  }
+}
+
 @theme {
-  --animate-pop: jradil-pop 260ms ease-out both;
+  --animate-bucket-fill: bucket-fill 480ms cubic-bezier(0.33, 1, 0.68, 1) both;
+  --animate-bucket-drain: bucket-drain 1200ms cubic-bezier(0.55, 0, 0.75, 0.4) both;
+  --animate-bucket-gray-body: bucket-gray-body 350ms ease-out both;
+  --animate-bucket-water-present: bucket-water-present 350ms ease-out both;
+  --animate-bucket-water-correct: bucket-water-correct 350ms ease-out both;
+  --animate-bucket-water-gray: bucket-water-gray 350ms ease-out both;
+  --animate-bucket-ink-on-gray: bucket-ink-on-gray 350ms ease-out both;
+  --animate-bucket-ink-info: bucket-ink-info 350ms ease-out both;
   --animate-rise: jradil-rise 220ms ease-out both;
 }
 
-@keyframes jradil-pop {
-  from {
-    transform: scale(0.94);
-  }
-  60% {
-    transform: scale(1.04);
-  }
-  to {
-    transform: scale(1);
-  }
+/*
+  The same graphics for the on-screen keys, driven by transitions instead of
+  keyframes: a key's state only ever moves forward, so a plain transition on the
+  property is enough, and the delay lets the board finish settling first.
+*/
+.bucket-water-group {
+  transition: transform 560ms cubic-bezier(0.33, 1, 0.68, 1) 520ms;
+}
+
+.bucket-water {
+  fill: var(--bucket-water-plain);
+  transition: fill 420ms ease-out 700ms;
+}
+
+.bucket-water-present {
+  fill: var(--bucket-water-present);
+}
+
+.bucket-water-correct {
+  fill: var(--bucket-water-correct);
+}
+
+.bucket-water-gray {
+  fill: var(--bucket-water-gray);
+}
+
+.bucket-letter {
+  fill: var(--color-base-content);
+  transition: fill 420ms ease-out 700ms;
+}
+
+.bucket-letter-on-gray {
+  fill: var(--color-base-100);
+}
+
+.bucket-letter-info {
+  fill: var(--color-info-content);
+}
+
+.bucket-body {
+  fill: var(--bucket-surface);
+  stroke: var(--bucket-edge);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  transition:
+    fill 420ms ease-out 700ms,
+    stroke 420ms ease-out 700ms;
+}
+
+.bucket-body-gray {
+  fill: var(--bucket-gray-surface);
+  stroke: var(--bucket-gray-edge);
 }
 
 @keyframes jradil-rise {

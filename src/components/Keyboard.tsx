@@ -1,14 +1,13 @@
-import { KEYPAD_ROWS, type KeyState } from "#/lib/arabic.ts";
-
-function keyClass(state: KeyState | undefined): string {
-  if (state === "correct") return "btn-success";
-  if (state === "present") return "btn-warning";
-  if (state === "absent") return "btn-neutral";
-  return "";
-}
+import { Bucket } from "#/components/Bucket.tsx";
+import { KEYPAD_ROWS, type LetterState } from "#/lib/arabic.ts";
 
 /**
  * On-screen keypad.
+ *
+ * Every letter key is the same bucket as the board, drawn at key size. A key
+ * starts empty and settles into the same three graphics as the board as its
+ * best-known state improves — the CSS in `styles.css` delays those
+ * transitions so the keys follow the board's reveal rather than race it.
  *
  * Rows follow the familiar Arabic keyboard order and run right to left, so the
  * most used letters sit where a Sudanese keyboard user expects them.
@@ -20,7 +19,7 @@ export function Keyboard({
   onBackspace,
   onEnter,
 }: {
-  keyStates: Record<string, KeyState>;
+  keyStates: Record<string, LetterState>;
   disabled: boolean;
   onLetter: (letter: string) => void;
   onBackspace: () => void;
@@ -37,15 +36,14 @@ export function Keyboard({
               disabled={disabled}
               aria-label={`الحرف ${letter}`}
               onClick={() => onLetter(letter)}
-              className={`btn h-12 min-w-0 flex-1 px-0 text-lg font-bold ${keyClass(
-                keyStates[letter],
-              )}`}
+              className="flex h-12 min-w-0 flex-1 items-center justify-center rounded-md transition-colors hover:bg-base-200 active:bg-base-300 disabled:opacity-60"
             >
-              {letter}
+              <Bucket letter={letter} result={keyStates[letter]} className="h-11 w-full" />
             </button>
           ))}
         </div>
       ))}
+
       <div dir="rtl" className="flex gap-1">
         <button
           type="button"

@@ -17,9 +17,7 @@ import { WORD_LETTER_COUNT } from "./config.ts";
 
 export type LetterState = "correct" | "present" | "absent";
 
-export type KeyState = LetterState | "unused";
-
-/** The 28 letters that can appear on a tile or a key. */
+/** The 28 letters that can appear on a bucket or a key. */
 export const BASE_LETTERS = [
   "ا",
   "ب",
@@ -200,12 +198,13 @@ export function scoreGuess(guess: string, answer: string): LetterState[] {
 
 /**
  * Collapses every guess into the best state seen for each letter, for the
- * on-screen keypad colours.
+ * on-screen keypad. A letter that has never been guessed is simply absent from
+ * the map.
  */
 export function keypadStates(
   guesses: readonly { letters: readonly string[]; states: readonly LetterState[] }[],
-): Record<string, KeyState> {
-  const result: Record<string, KeyState> = {};
+): Record<string, LetterState> {
+  const result: Record<string, LetterState> = {};
   const rank: Record<LetterState, number> = { absent: 1, present: 2, correct: 3 };
 
   for (const guess of guesses) {
@@ -213,28 +212,11 @@ export function keypadStates(
       const state = guess.states[index];
       if (!state) return;
       const current = result[letter];
-      if (current === undefined || rank[state] > rank[current as LetterState]) {
+      if (current === undefined || rank[state] > rank[current]) {
         result[letter] = state;
       }
     });
   }
 
   return result;
-}
-
-const SHARE_TILES: Record<LetterState, string> = {
-  correct: "🟩",
-  present: "🟨",
-  absent: "⬜",
-};
-
-/**
- * Builds the shareable emoji grid.
- *
- * Each row is emitted in reading order, and prefixed with a right-to-left mark
- * so that a chat client rendering direction-neutral emoji still lays the row
- * out the same way the board does: first letter on the right.
- */
-export function shareGrid(rows: readonly (readonly LetterState[])[]): string {
-  return rows.map((row) => `\u200F${row.map((state) => SHARE_TILES[state]).join("")}`).join("\n");
 }

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
-import { shareGrid } from "#/lib/arabic.ts";
 import { APP_NAME_AR, MAX_ATTEMPTS } from "#/lib/config.ts";
 import type { GameRow, GameStatus } from "#/lib/game.ts";
+import { buildShareText } from "#/lib/share.ts";
 import { shortDateKey, type DateKey } from "#/lib/sudan-time.ts";
 
 /**
@@ -15,6 +15,8 @@ import { shortDateKey, type DateKey } from "#/lib/sudan-time.ts";
 export function ResultDialog({
   open,
   dateKey,
+  endsAt,
+  appUrl,
   status,
   answer,
   link,
@@ -23,6 +25,10 @@ export function ResultDialog({
 }: {
   open: boolean;
   dateKey: DateKey;
+  /** ISO instant the next word opens, so the shared countdown is live. */
+  endsAt: string;
+  /** Public address of this deployment, appended to the shared text. */
+  appUrl: string | null;
   status: GameStatus;
   answer: string | null;
   link: string | null;
@@ -31,6 +37,7 @@ export function ResultDialog({
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [copied, setCopied] = useState(false);
+  const maxAttempts = MAX_ATTEMPTS;
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -48,8 +55,21 @@ export function ResultDialog({
   const won = status === "won";
 
   async function share() {
-    const grid = shareGrid(rows.map((row) => row.states));
-    const text = `${APP_NAME_AR} — ${shortDateKey(dateKey)}\n${rows.length}/${MAX_ATTEMPTS}\n${grid}`;
+    // Read the clock now rather than reusing the payload's figure, which was
+    // taken when the page loaded and may be minutes stale by the time a player
+    // finishes and shares.
+    const msRemaining = Math.max(0, new Date(endsAt).getTime() - Date.now());
+
+    const text = buildShareText({
+      appName: APP_NAME_AR,
+      dateLabel: shortDateKey(dateKey),
+      attempts: rows.length,
+      maxAttempts: maxAttempts,
+      states: rows.map((row) => row.states),
+      msRemaining,
+      appUrl,
+    });
+
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);

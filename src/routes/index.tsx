@@ -1,6 +1,7 @@
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect } from "react";
 
+import { Bucket } from "#/components/Bucket.tsx";
 import { Countdown } from "#/components/Countdown.tsx";
 import { GameBoard } from "#/components/GameBoard.tsx";
 import { Keyboard } from "#/components/Keyboard.tsx";
@@ -8,7 +9,7 @@ import { ResultDialog } from "#/components/ResultDialog.tsx";
 import { SiteHeader } from "#/components/SiteHeader.tsx";
 import { useDailyGame } from "#/hooks/useDailyGame.ts";
 import { isBaseLetter, toLetters } from "#/lib/arabic.ts";
-import { APP_NAME_AR } from "#/lib/config.ts";
+import { APP_NAME_AR, NEXT_WORD_LABEL } from "#/lib/config.ts";
 import { shortDateKey } from "#/lib/sudan-time.ts";
 import { getPuzzle } from "#/server/puzzle.ts";
 
@@ -67,7 +68,7 @@ function GamePage() {
           <Countdown
             msRemaining={puzzle.msRemaining}
             endsAt={puzzle.endsAt}
-            label="الكلمة القادمة بعد"
+            label={NEXT_WORD_LABEL}
             onElapsed={handleElapsed}
           />
         </div>
@@ -133,6 +134,8 @@ function GamePage() {
       <ResultDialog
         open={game.resultOpen}
         dateKey={puzzle.dateKey}
+        endsAt={puzzle.endsAt}
+        appUrl={puzzle.appUrl}
         status={game.status}
         answer={game.answer}
         link={game.link}
@@ -143,19 +146,23 @@ function GamePage() {
   );
 }
 
-/** Explains the three tile colours, for the first guess only. */
+/**
+ * Teaches the three bucket graphics, and disappears once the first guess is in.
+ * The examples are the real component, so the legend can never fall out of step
+ * with what the board actually draws.
+ */
 function Legend() {
   const items = [
-    { className: "bg-success text-success-content", label: "الحرف في مكانه الصحيح" },
-    { className: "bg-warning text-warning-content", label: "الحرف موجود في مكان آخر" },
-    { className: "bg-base-300 text-base-content/50", label: "الحرف غير موجود" },
+    { letter: "ب", result: "correct" as const, label: "الحرف في مكانه الصحيح" },
+    { letter: "ن", result: "present" as const, label: "الحرف موجود في مكان آخر" },
+    { letter: "د", result: "absent" as const, label: "الحرف غير موجود" },
   ];
 
   return (
-    <div className="mx-auto flex w-full max-w-sm flex-col gap-1.5 text-xs sm:flex-row sm:justify-between">
+    <div className="mx-auto flex w-full max-w-md flex-col gap-2 text-xs sm:flex-row sm:justify-between">
       {items.map((item) => (
         <div key={item.label} className="flex items-center gap-2">
-          <span className={`h-5 w-5 shrink-0 rounded border ${item.className}`} />
+          <Bucket letter={item.letter} result={item.result} className="h-10 w-8 shrink-0" />
           <span className="text-base-content/70">{item.label}</span>
         </div>
       ))}

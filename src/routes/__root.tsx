@@ -19,7 +19,14 @@ export const Route = createRootRoute({
           "لعبة كلمة اليوم باللهجة السودانية: خمسة حروف، ست محاولات، وكلمة جديدة كل يوم عند منتصف الليل بتوقيت السودان.",
       },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      // The ICO first for old browsers, then the SVG they will prefer if they
+      // can read it, and a flat PNG for iOS home screens.
+      { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },
+    ],
   }),
   shellComponent: RootDocument,
 });

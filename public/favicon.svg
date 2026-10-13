@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="3 0 58 58" width="64" height="64" role="img" aria-label="جرادل">
+  <title>جرادل</title>
+
+  <!--
+    The app's bucket, filled with blue water and marked with ج.
+
+    Same geometry as the on-screen buckets (see src/components/Bucket.tsx), on a
+    square canvas trimmed to the drawn extent so it fills a favicon slot.
+
+    Colours are literal hex because favicons are rasterised by tools that do not
+    all understand oklch. They are the light theme's info / info-content pair,
+    converted from oklch(74% 0.16 232.661) and oklch(29% 0.066 243.157).
+    A text element is used rather than an outlined path so the mark stays
+    editable; the font stack below is Arabic-capable on every major platform.
+  -->
+  <defs>
+    <clipPath id="bucket-interior">
+      <path d="M12,15 H52 L48.5,48 Q48.1,52 44.1,52 H19.9 Q15.9,52 15.5,48 Z" />
+    </clipPath>
+  </defs>
+
+  <!-- The glazed bucket. -->
+  <path
+    d="M9,12 H55 L51,50 Q50.5,55 45.5,55 H18.5 Q13.5,55 13,50 Z"
+    fill="#DDF4FF"
+    stroke="#042E49"
+    stroke-width="2.5"
+    stroke-linejoin="round"
+  />
+
+  <!-- Water, brim full, with its surface breaking just under the rim. -->
+  <g clip-path="url(#bucket-interior)">
+    <path
+      d="M0,18 q8,-5 16,0 t16,0 t16,0 t16,0 V182 H0 Z"
+      fill="#00BAFE"
+    />
+  </g>
+
+  <!-- The rim, solid at this size so the silhouette still reads at 16px. -->
+  <rect x="7" y="3" width="50" height="10" rx="3" fill="#042E49" />
+
+  <text
+    x="32"
+    y="33.5"
+    dy="0.16em"
+    text-anchor="middle"
+    font-family="system-ui, -apple-system, 'SF Arabic', 'Geeza Pro', 'Segoe UI', Tahoma, sans-serif"
+    font-size="30"
+    font-weight="700"
+    fill="#042E49"
+  >ج</text>
+</svg>

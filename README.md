@@ -188,6 +188,29 @@ The integration tests create their own scratch database and drop it afterwards,
 so the configured database is never touched. They skip themselves when
 `MONGODB_URI` is absent.
 
+## Sharing a result
+
+The end-of-game panel copies a summary to the clipboard:
+
+```
+جرادل — الثلاثاء، 13 أكتوبر
+3/6
+‏🫗🟨🫗🫗🫗
+‏🫗🟨🪣🫗🟨
+‏🪣🪣🪣🪣🪣
+الكلمة القادمة بعد 07:04:09
+‎https://jradil.example.com
+```
+
+One emoji per letter state, echoing the bucket the board draws: 🪣 for a letter in its
+right place, 🟨 for one that is in the word but elsewhere, and 🫗 for one that is not
+in the word at all — the water it could not keep. Each row carries a right-to-left
+mark so it lays out the way the board does, and the address carries a
+left-to-right mark so clients do not reorder its tail.
+
+The countdown is read from the clock when the player taps share, not from the page
+load, so a message sent late in the evening is still accurate.
+
 ## Notes on Arabic
 
 `src/lib/arabic.ts` folds the spelling differences an Arabic reader ignores —

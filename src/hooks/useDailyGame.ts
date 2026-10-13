@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { keypadStates, type KeyState } from "#/lib/arabic.ts";
+import { keypadStates, type LetterState } from "#/lib/arabic.ts";
 import type { GameRow, GameStatus } from "#/lib/game.ts";
 import { submitGuess, type PuzzlePayload } from "#/server/puzzle.ts";
 
@@ -58,7 +58,7 @@ export type DailyGame = {
   link: string | null;
   message: string | null;
   busy: boolean;
-  keyStates: Record<string, KeyState>;
+  keyStates: Record<string, LetterState>;
   /** Board row currently accepting letters, or -1 when the game is over. */
   activeRow: number;
   pushLetter: (letter: string) => void;

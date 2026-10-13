@@ -16,6 +16,7 @@ import { z } from "zod";
 
 import { isPlayableWord, scoreGuess, toWordLetters, type LetterState } from "#/lib/arabic.ts";
 import { MAX_ATTEMPTS, WORD_LETTER_COUNT } from "#/lib/config.ts";
+import { optionalEnv } from "#/lib/env.ts";
 import { dayEndUtc, dayStartUtc, isDateKey, sudanDateKey, type DateKey } from "#/lib/sudan-time.ts";
 import { getSettings, getWordByText, resolveDay, wordExists } from "#/lib/words.ts";
 
@@ -37,6 +38,11 @@ export type PuzzlePayload = {
   endsAt: string;
   /** Milliseconds left on the server's clock when this payload was produced. */
   msRemaining: number;
+  /**
+   * Public address of this deployment, from `APP_URL`. Null when unset, in which
+   * case the share text simply leaves the link out.
+   */
+  appUrl: string | null;
   state: PuzzleState;
 };
 
@@ -66,6 +72,7 @@ function puzzlePayload(dateKey: DateKey, state: PuzzleState, now: Date): PuzzleP
     startsAt: dayStartUtc(dateKey).toISOString(),
     endsAt: dayEndUtc(dateKey).toISOString(),
     msRemaining: Math.max(0, dayEndUtc(dateKey).getTime() - now.getTime()),
+    appUrl: optionalEnv("APP_URL"),
     state,
   };
 }

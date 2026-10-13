@@ -20,5 +20,8 @@ export const COLLECTION_NAME = "jradil";
 /** App name shown in the UI. */
 export const APP_NAME_AR = "جرادل";
 
+/** Countdown phrase, used both on screen and in the share text. */
+export const NEXT_WORD_LABEL = "الكلمة القادمة بعد";
+
 /** Sudan runs on UTC+2 all year: no daylight saving transitions. */
 export const SUDAN_UTC_OFFSET_MINUTES = 120;
