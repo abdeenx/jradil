@@ -1,4 +1,4 @@
-import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect } from "react";
 
 import { Bucket } from "#/components/Bucket.tsx";
@@ -123,11 +123,8 @@ function GamePage() {
           </div>
         )}
 
-        <footer className="text-base-content/40 mt-8 flex flex-wrap items-center justify-center gap-2 text-xs">
-          <span>{APP_NAME_AR} — كلمة واحدة كل يوم، بتوقيت السودان (UTC+2).</span>
-          <Link to="/admin" className="hover:text-base-content/70 underline">
-            لوحة المشرف
-          </Link>
+        <footer className="text-base-content/40 mt-8 text-center text-xs">
+          {APP_NAME_AR} — كلمة واحدة كل يوم، بتوقيت السودان (UTC+2).
         </footer>
       </main>
 
