@@ -47,6 +47,7 @@ const config = defineConfig({
     devtools(),
     nitro({
       rollupConfig: { external: [/^@sentry\//] },
+      plugins: ["./src/server/plugins/warm-up.ts"],
       routeRules: {
         "/**": { headers: SECURITY_HEADERS },
         "/admin": { headers: NO_STORE },
