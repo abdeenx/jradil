@@ -96,7 +96,7 @@ export function ResultDialog({
               rel="noopener noreferrer nofollow"
               className="btn btn-ghost btn-sm mt-3 gap-1"
             >
-              اقرأ عن الكلمة
+              اقرأ معناها في قاموس اللهجة السودانية
               <span aria-hidden="true">↗</span>
             </a>
           ) : null}

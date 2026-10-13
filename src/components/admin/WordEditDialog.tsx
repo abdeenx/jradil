@@ -77,7 +77,8 @@ export function WordEditDialog({
             onChange={(event) => setLink(event.target.value)}
           />
           <p className="label">
-            يظهر للاعب بعد انتهاء الجولة كزر «اقرأ عن الكلمة». تُقبل روابط http و https فقط.
+            يظهر للاعب بعد انتهاء الجولة كزر «اقرأ معناها في قاموس اللهجة السودانية». تُقبل روابط http
+            و https فقط.
           </p>
         </fieldset>
 

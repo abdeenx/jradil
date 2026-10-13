@@ -80,3 +80,10 @@ describe("socialMeta", () => {
     expect(tag(withoutUrl, "og:title")).toBe(TITLE_AR);
   });
 });
+
+describe("title", () => {
+  it("names the game and its pitch, joined by a plain hyphen", () => {
+    expect(TITLE_AR).toBe("جرادل - كلمة سودانية جديدة كل يوم");
+    expect(TITLE_AR).not.toContain("—");
+  });
+});

@@ -32,7 +32,7 @@ export function socialMeta(appUrl: string | null): MetaTag[] {
   // A trailing slash on the configured address would produce a double slash.
   const base = appUrl?.replace(/\/+$/, "") ?? "";
   const image = base ? `${base}${OG_IMAGE_PATH}` : OG_IMAGE_PATH;
-  const alt = `${TAGLINE_AR} — ${APP_NAME_AR}`;
+  const alt = `${TAGLINE_AR} - ${APP_NAME_AR}`;
 
   return [
     { property: "og:type", content: "website" },

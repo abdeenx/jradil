@@ -162,7 +162,7 @@ silently dropped.
 ## The learn-more link
 
 A word can point at a page about itself — a Wiktionary entry, an article. When the
-puzzle ends, won or lost, the result panel offers the player _اقرأ عن الكلمة_.
+puzzle ends, won or lost, the result panel offers the player _اقرأ معناها في قاموس اللهجة السودانية_.
 
 Only `http` and `https` are accepted; anything else is stored as no link, because
 the value goes straight into an `href`. The link is read at reveal time rather

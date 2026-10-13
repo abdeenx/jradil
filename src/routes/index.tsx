@@ -139,7 +139,7 @@ function GamePage() {
         )}
 
         <footer className="text-base-content/40 mt-8 text-center text-xs">
-          {APP_NAME_AR} — كلمة واحدة كل يوم، بتوقيت السودان (UTC+2).
+          {APP_NAME_AR} — كلمة سودانية جديدة كل يوم، بتوقيت الخرطوم (UTC+2).
         </footer>
       </main>
 
