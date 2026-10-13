@@ -20,6 +20,12 @@ export const COLLECTION_NAME = "jradil";
 /** App name shown in the UI. */
 export const APP_NAME_AR = "جرادل - لعبة كلمة اليوم";
 
+/**
+ * The name the header wordmark spells, one bucket per character — so the bare
+ * name only, never a phrase.
+ */
+export const WORDMARK_AR = "جرادل";
+
 /** One-line pitch, under the wordmark and in social previews. */
 export const TAGLINE_AR = "كلمة جديدة من اللهجة السودانية كل يوم";
 

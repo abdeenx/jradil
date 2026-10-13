@@ -169,9 +169,9 @@ function GamePage() {
  */
 function Legend() {
   const items = [
-    { letter: "ب", result: "correct" as const, label: "الحرف في مكانه الصحيح" },
-    { letter: "ن", result: "present" as const, label: "الحرف موجود في مكان آخر" },
-    { letter: "د", result: "absent" as const, label: "الحرف غير موجود" },
+    { letter: "ع", result: "correct" as const, label: "الحرف في مكانه الصحيح" },
+    { letter: "س", result: "present" as const, label: "الحرف موجود في مكان آخر" },
+    { letter: "ل", result: "absent" as const, label: "الحرف غير موجود" },
   ];
 
   return (

@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 
 import { Bucket } from "#/components/Bucket.tsx";
 import { ThemeToggle } from "#/components/ThemeToggle.tsx";
-import { APP_NAME_AR } from "#/lib/config.ts";
+import { WORDMARK_AR } from "#/lib/config.ts";
 
 /**
  * The wordmark is the app's own board: one bucket per letter of the name, all
@@ -13,7 +13,7 @@ import { APP_NAME_AR } from "#/lib/config.ts";
  * from what players actually look at — and it follows the theme for free, since
  * the buckets are painted from the same variables.
  */
-const NAME_LETTERS = Array.from(APP_NAME_AR);
+const NAME_LETTERS = Array.from(WORDMARK_AR);
 
 /**
  * Sized in one place. The letters inside a bucket occupy roughly 0.37 of its
@@ -36,7 +36,7 @@ export function SiteHeader({ subtitle }: { subtitle?: string }) {
           to="/"
           // The row is artwork, so the name is handed to assistive technology
           // whole rather than spelled out one bucket at a time.
-          aria-label={APP_NAME_AR}
+          aria-label={WORDMARK_AR}
           className="shrink-0"
         >
           <span aria-hidden="true" className="flex items-center gap-0.5">

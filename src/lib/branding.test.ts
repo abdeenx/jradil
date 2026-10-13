@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { APP_NAME_AR } from "./config.ts";
+import { APP_NAME_AR, WORDMARK_AR } from "./config.ts";
 
 const FAVICON = readFileSync(new URL("../../public/favicon.svg", import.meta.url), "utf8");
 const BUCKET = readFileSync(new URL("./bucket.ts", import.meta.url), "utf8");
@@ -41,6 +41,13 @@ describe("the tab icon", () => {
     // A rename that no longer starts with ج leaves the icon showing the wrong
     // initial, with nothing else in the app to catch it.
     expect(APP_NAME_AR.startsWith("ج")).toBe(true);
+  });
+});
+
+describe("the header wordmark", () => {
+  it("spells the name alone, since it draws one bucket per character", () => {
+    // A phrase here would spell itself across the whole header.
+    expect(WORDMARK_AR).toMatch(/^\p{L}+$/u);
   });
 });
 

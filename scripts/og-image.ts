@@ -29,7 +29,7 @@ import {
   BUCKET_RIM,
   BUCKET_WATER_PATH,
 } from "../src/lib/bucket.ts";
-import { APP_NAME_AR, TAGLINE_AR } from "../src/lib/config.ts";
+import { TAGLINE_AR, WORDMARK_AR } from "../src/lib/config.ts";
 import { OG_IMAGE_HEIGHT, OG_IMAGE_WIDTH } from "../src/lib/social.ts";
 
 const WIDTH = OG_IMAGE_WIDTH;
@@ -64,7 +64,7 @@ function bucket(left: number, top: number, letter: string): string {
   </g>`;
 }
 
-const letters = Array.from(APP_NAME_AR);
+const letters = Array.from(WORDMARK_AR);
 const rowWidth = letters.length * BUCKET_WIDTH + (letters.length - 1) * GAP;
 
 const TAGLINE_SIZE = 40;
