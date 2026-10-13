@@ -7,6 +7,26 @@ import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
 
+/**
+ * Sent with every response. No full script CSP: the inline theme script and the
+ * framework's hydration scripts would need nonces. These directives restrict
+ * nothing the app uses, and close framing, plugin content and base-URL
+ * hijacking.
+ */
+const SECURITY_HEADERS = {
+  "content-security-policy": "frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+  "x-frame-options": "DENY",
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "strict-origin-when-cross-origin",
+  "cross-origin-opener-policy": "same-origin",
+  "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  // Ignored by browsers over plain http, so harmless in development.
+  "strict-transport-security": "max-age=31536000",
+};
+
+/** Operator pages and every server-function response carry per-user data. */
+const NO_STORE = { "cache-control": "no-store" };
+
 const config = defineConfig({
   fmt: {
     ignorePatterns: [
@@ -25,7 +45,15 @@ const config = defineConfig({
   resolve: { tsconfigPaths: true },
   plugins: lazyPlugins(() => [
     devtools(),
-    nitro({ rollupConfig: { external: [/^@sentry\//] } }),
+    nitro({
+      rollupConfig: { external: [/^@sentry\//] },
+      routeRules: {
+        "/**": { headers: SECURITY_HEADERS },
+        "/admin": { headers: NO_STORE },
+        "/admin/**": { headers: NO_STORE },
+        "/_serverFn/**": { headers: NO_STORE },
+      },
+    }),
     tailwindcss(),
     tanstackStart(),
     viteReact(),

@@ -5,16 +5,23 @@
  * short-lived signed session cookie. There are no admin accounts to store, so
  * the single collection stays reserved for the game's own data.
  *
- * Set `ADMIN_PASSWORD` in `.env`. `ADMIN_SESSION_SECRET` is optional; when it is
- * absent the password doubles as the signing key, which is safe because knowing
- * the password already grants admin access.
+ * Set `ADMIN_PASSWORD` in `.env`. `ADMIN_SESSION_SECRET` is optional. The
+ * signing key is stretched from both with scrypt, so a leaked cookie is not a
+ * fast offline oracle for the password, and changing either one signs every
+ * existing session out.
  */
 
 import "@tanstack/react-start/server-only";
 
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, scryptSync, timingSafeEqual } from "node:crypto";
 
-import { deleteCookie, getCookie, setCookie } from "@tanstack/react-start/server";
+import {
+  deleteCookie,
+  getCookie,
+  getRequestHeader,
+  getRequestIP,
+  setCookie,
+} from "@tanstack/react-start/server";
 
 import { optionalEnv } from "./env.ts";
 
@@ -28,8 +35,17 @@ export type AdminSession = {
   expiresAt: number | null;
 };
 
-function signingKey(): string | null {
-  return optionalEnv("ADMIN_SESSION_SECRET") ?? optionalEnv("ADMIN_PASSWORD");
+/** Derived once per secret/password pair: scrypt is deliberately slow. */
+let derivedKey: { material: string; key: Buffer } | null = null;
+
+function signingKey(): Buffer | null {
+  const password = optionalEnv("ADMIN_PASSWORD");
+  if (!password) return null;
+  const material = `${optionalEnv("ADMIN_SESSION_SECRET") ?? ""}\0${password}`;
+  if (derivedKey?.material !== material) {
+    derivedKey = { material, key: scryptSync(material, "jradil-admin-session", 32) };
+  }
+  return derivedKey.key;
 }
 
 function sign(payload: string): string {
@@ -38,10 +54,10 @@ function sign(payload: string): string {
   return createHmac("sha256", key).update(payload).digest("base64url");
 }
 
+/** Compares digests, so neither the content nor the length of a secret leaks. */
 function constantTimeEquals(a: string, b: string): boolean {
-  const left = Buffer.from(a);
-  const right = Buffer.from(b);
-  if (left.length !== right.length) return false;
+  const left = createHash("sha256").update(a).digest();
+  const right = createHash("sha256").update(b).digest();
   return timingSafeEqual(left, right);
 }
 
@@ -117,6 +133,35 @@ const attempts = (globalForThrottle.__jradilLoginAttempts ??= new Map<string, At
 
 const MAX_FAILURES = 8;
 const BLOCK_MS = 5 * 60 * 1000;
+/** Bounds the map, so a flood of addresses cannot grow it without limit. */
+const MAX_TRACKED = 10_000;
+
+/**
+ * Who is attempting to log in, keyed by client address.
+ *
+ * Keying by address means a stranger guessing passwords locks out only
+ * themselves, not the operator. `X-Forwarded-For` is honoured only when
+ * `TRUST_PROXY=true`, and then only its last hop — the one the proxy itself
+ * appended — because every earlier entry is whatever the client chose to send.
+ */
+export function loginIdentifier(): string {
+  if (optionalEnv("TRUST_PROXY") === "true") {
+    const forwarded = getRequestHeader("x-forwarded-for")?.split(",").at(-1)?.trim();
+    if (forwarded) return forwarded;
+  }
+  return getRequestIP() ?? "unknown";
+}
+
+function pruneAttempts(now: number): void {
+  for (const [key, attempt] of attempts) {
+    if (attempt.blockedUntil <= now && attempt.failures === 0) attempts.delete(key);
+  }
+  // Still full of live entries: drop the oldest, which a Map iterates first.
+  for (const key of attempts.keys()) {
+    if (attempts.size < MAX_TRACKED) break;
+    attempts.delete(key);
+  }
+}
 
 export function loginBlockedFor(identifier: string): number {
   const attempt = attempts.get(identifier);
@@ -125,6 +170,7 @@ export function loginBlockedFor(identifier: string): number {
 }
 
 export function recordLoginFailure(identifier: string): void {
+  if (!attempts.has(identifier) && attempts.size >= MAX_TRACKED) pruneAttempts(Date.now());
   const attempt = attempts.get(identifier) ?? { failures: 0, blockedUntil: 0 };
   attempt.failures += 1;
   if (attempt.failures >= MAX_FAILURES) {

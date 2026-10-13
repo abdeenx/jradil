@@ -128,6 +128,12 @@ describe.skipIf(!connectionString)("words against a live MongoDB", () => {
       expect(summary.matched).toBe(2);
       expect(after.total).toBe(before.total);
     });
+
+    it("refuses a five-letter word that could never be typed on the keypad", async () => {
+      const summary = await importWords("hello\nمدرسa");
+      expect(summary.inserted).toBe(0);
+      expect(summary.skipped).toHaveLength(2);
+    });
   });
 
   describe("settings and pool", () => {

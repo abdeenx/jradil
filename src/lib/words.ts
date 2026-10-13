@@ -14,6 +14,8 @@
  *   always override explicitly, and a deliberate repeat is allowed.
  */
 
+import { randomBytes } from "node:crypto";
+
 import type mongoose from "mongoose";
 
 import { isPlayableWord, normalizeArabic, toLetters } from "./arabic.ts";
@@ -165,10 +167,30 @@ export function toDayView(day: DayLike): DayView {
   };
 }
 
+// ---------------------------------------------------------------- cache --
+
+/**
+ * How long the two reads every guess needs — the settings and the day's word —
+ * are reused before going back to the database. Writes made through this module
+ * drop the cached copy at once; another server instance picks a change up
+ * within this window.
+ */
+const CACHE_TTL_MS = 15_000;
+
+let settingsCache: { value: SettingsView; expiresAt: number } | null = null;
+let dayCache: { dateKey: DateKey; day: DayView; expiresAt: number } | null = null;
+
 // ------------------------------------------------------------- settings --
 
 /** Reads the singleton settings document, creating it on first use. */
 export async function getSettings(): Promise<SettingsView> {
+  if (settingsCache && settingsCache.expiresAt > Date.now()) return settingsCache.value;
+  const value = await readSettings();
+  settingsCache = { value, expiresAt: Date.now() + CACHE_TTL_MS };
+  return value;
+}
+
+async function readSettings(): Promise<SettingsView> {
   await ensureSchema();
 
   const existing = await Settings.findOne({ key: SETTINGS_KEY }).lean();
@@ -196,8 +218,36 @@ export async function updateSettings(patch: Partial<SettingsView>): Promise<Sett
   }
   if (Object.keys(update).length > 0) {
     await Settings.updateOne({ key: SETTINGS_KEY }, { $set: update }, { upsert: true });
+    settingsCache = null;
   }
   return getSettings();
+}
+
+let gameSecret: Promise<string> | null = null;
+
+/**
+ * The key that signs players' progress tokens.
+ *
+ * Kept in the settings document rather than the environment so every instance
+ * shares it and a deployment needs no extra configuration. The first caller
+ * generates it; the conditional write means a concurrent caller can never
+ * replace it, and both then read back the one that won.
+ */
+export function getGameSecret(): Promise<string> {
+  gameSecret ??= (async () => {
+    await getSettings();
+    await Settings.updateOne(
+      { key: SETTINGS_KEY, secret: null },
+      { $set: { secret: randomBytes(32).toString("base64url") } },
+    );
+    const settings = await Settings.findOne({ key: SETTINGS_KEY }, { secret: 1 }).lean();
+    if (!settings?.secret) throw new Error("تعذّر إنشاء مفتاح التوقيع");
+    return settings.secret;
+  })().catch((error: unknown) => {
+    gameSecret = null;
+    throw error;
+  });
+  return gameSecret;
 }
 
 // ---------------------------------------------------------------- words --
@@ -531,6 +581,17 @@ async function releaseWord(id: mongoose.Types.ObjectId, dateKey: DateKey): Promi
  * silently consume a candidate.
  */
 export async function resolveDay(dateKey: DateKey): Promise<DayResolution> {
+  if (dayCache?.dateKey === dateKey && dayCache.expiresAt > Date.now()) {
+    return { status: "ready", day: dayCache.day };
+  }
+  const resolution = await resolveDayUncached(dateKey);
+  if (resolution.status === "ready") {
+    dayCache = { dateKey, day: resolution.day, expiresAt: Date.now() + CACHE_TTL_MS };
+  }
+  return resolution;
+}
+
+async function resolveDayUncached(dateKey: DateKey): Promise<DayResolution> {
   await ensureSchema();
 
   const existing = await Day.findOne({ dateKey }).lean();
@@ -769,6 +830,7 @@ export async function setDayWord(
     },
     { upsert: true, returnDocument: "after", lean: true },
   );
+  dayCache = null;
 
   if (!day) return fail("save-failed", "تعذّر حفظ كلمة اليوم");
   return { ok: true, value: toDayView(asDayLike(day)) };
@@ -784,6 +846,7 @@ export async function clearDayWord(
 
   if (day.wordId) await releaseWord(day.wordId, dateKey);
   await Day.deleteOne({ dateKey });
+  dayCache = null;
   return { ok: true, value: { dateKey } };
 }
 

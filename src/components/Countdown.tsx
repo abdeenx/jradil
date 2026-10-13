@@ -6,17 +6,21 @@ import { formatDuration, splitDuration } from "#/lib/sudan-time.ts";
  * Counts down to the next Sudan midnight.
  *
  * The server's remaining time seeds the first render (so server and client
- * markup agree during hydration), then the display is re-aligned to the
- * browser's own clock and ticks locally — no polling.
+ * markup agree during hydration) and fixes a deadline on the browser's clock;
+ * every tick then measures against that deadline — no polling.
+ *
+ * Both halves matter. Counting down by a fixed step drifts whenever the browser
+ * throttles timers, as it does in background tabs. Comparing against the
+ * server's `endsAt` instead would trust the browser's clock, and a clock that
+ * runs fast would reach zero, reload, still be on the old day, and reload again
+ * until the server caught up.
  */
 export function Countdown({
   msRemaining,
-  endsAt,
   label,
   onElapsed,
 }: {
   msRemaining: number;
-  endsAt: string;
   label: string;
   onElapsed: () => void;
 }) {
@@ -24,20 +28,13 @@ export function Countdown({
   const firedRef = useRef(false);
 
   useEffect(() => {
-    setRemaining(msRemaining);
     firedRef.current = false;
-  }, [msRemaining]);
-
-  useEffect(() => {
-    setRemaining(Math.max(0, new Date(endsAt).getTime() - Date.now()));
-  }, [endsAt]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setRemaining((previous) => Math.max(0, previous - 1000));
-    }, 1000);
+    const deadline = Date.now() + msRemaining;
+    const tick = () => setRemaining(Math.max(0, deadline - Date.now()));
+    tick();
+    const timer = window.setInterval(tick, 1000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [msRemaining]);
 
   useEffect(() => {
     if (remaining > 0 || firedRef.current) return;

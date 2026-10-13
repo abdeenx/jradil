@@ -1,8 +1,8 @@
-import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
+import { Link, createFileRoute, useRouter, type SearchSchemaInput } from "@tanstack/react-router";
 import { useState } from "react";
-import { z } from "zod";
 
 import { WordPicker } from "#/components/admin/WordPicker.tsx";
+import { pageParam } from "#/lib/search-params.ts";
 import { formatDateKey, shortDateKey } from "#/lib/sudan-time.ts";
 import {
   adminClearDayWord,
@@ -11,13 +11,11 @@ import {
   getDashboard,
 } from "#/server/admin.ts";
 
-/** Only the used-words list is paged; the daily job is always one screen. */
-const dashboardSearch = z.object({
-  usedPage: z.coerce.number().int().min(1).catch(1).default(1),
-});
-
 export const Route = createFileRoute("/admin/")({
-  validateSearch: dashboardSearch,
+  /** Only the used-words list is paged; the daily job is always one screen. */
+  validateSearch: (search: { usedPage?: unknown } & SearchSchemaInput) => ({
+    usedPage: pageParam(search.usedPage),
+  }),
   loaderDeps: ({ search }) => search,
   loader: ({ deps }) => getDashboard({ data: { usedPage: deps.usedPage } }),
   component: DashboardPage,

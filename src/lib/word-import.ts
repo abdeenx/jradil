@@ -17,7 +17,7 @@
  * operator's marking work.
  */
 
-import { normalizeArabic, toLetters } from "./arabic.ts";
+import { isBaseLetter, normalizeArabic, toLetters } from "./arabic.ts";
 import { WORD_LETTER_COUNT } from "./config.ts";
 import { ensureSchema } from "./db.ts";
 import { Word } from "./jradil-model.ts";
@@ -334,6 +334,12 @@ function dedupe(words: readonly ParsedWord[]): {
       });
       continue;
     }
+    // Same rule as a word added by hand: every letter must be on the keypad, or
+    // the word could be served but never guessed.
+    if (!letters.every(isBaseLetter)) {
+      invalid.push({ text: trimmed, reason: "تحتوي على حروف غير عربية" });
+      continue;
+    }
     if (word.dialect === false && word.pool === true) {
       invalid.push({ text: trimmed, reason: "كلمة مرشحة دون أن تكون سودانية" });
       continue;
@@ -416,7 +422,8 @@ export async function importWords(
         insertFields.pool = false;
       }
 
-      if (word.notes !== undefined) setFields.notes = word.notes;
+      // Matches the limit on a note typed into the dashboard.
+      if (word.notes !== undefined) setFields.notes = word.notes?.slice(0, 500) ?? null;
       else insertFields.notes = null;
 
       const link = normalizeExternalLink(word.link);

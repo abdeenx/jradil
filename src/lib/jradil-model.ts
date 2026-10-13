@@ -78,6 +78,8 @@ wordSchema.index(
   { name: "word_normalized_unique", unique: true, partialFilterExpression: { kind: "word" } },
 );
 wordSchema.index({ text: 1 }, { name: "word_text" });
+// The operator's word list is sorted newest first.
+wordSchema.index({ createdAt: -1, _id: -1 }, { name: "word_recent" });
 wordSchema.index(
   { dialect: 1, pool: 1, assignedDateKey: 1, firstServedDateKey: 1 },
   { name: "word_pool_lookup" },
@@ -107,6 +109,11 @@ const settingsSchema = new Schema({
   poolSize: { type: Number, required: true, default: DEFAULT_POOL_SIZE, min: 1 },
   /** Reject guesses that are not present in the dictionary. */
   enforceDictionary: { type: Boolean, required: true, default: true },
+  /**
+   * Key for the players' progress tokens (see `progress.ts`). Generated on first
+   * use and never sent to a client.
+   */
+  secret: { type: String, default: null },
 });
 
 settingsSchema.index(

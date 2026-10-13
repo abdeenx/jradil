@@ -4,6 +4,7 @@ import { APP_NAME_AR, MAX_ATTEMPTS } from "#/lib/config.ts";
 import type { GameRow, GameStatus } from "#/lib/game.ts";
 import { buildShareText } from "#/lib/share.ts";
 import { shortDateKey, type DateKey } from "#/lib/sudan-time.ts";
+import { isSafeExternalLink } from "#/lib/url.ts";
 
 /**
  * The end-of-game panel: the answer, a way to learn about the word, and the
@@ -88,7 +89,7 @@ export function ResultDialog({
           <p className="text-base-content/60 text-sm">الكلمة كانت</p>
           <p className="mt-1 text-4xl font-bold tracking-widest">{answer ?? "—"}</p>
 
-          {link ? (
+          {isSafeExternalLink(link) ? (
             <a
               href={link}
               target="_blank"

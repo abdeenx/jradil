@@ -1,9 +1,10 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, useRouter, type SearchSchemaInput } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { z } from "zod";
 
 import { WordEditDialog } from "#/components/admin/WordEditDialog.tsx";
 import { WORD_LETTER_COUNT } from "#/lib/config.ts";
+import { enumParam, pageParam, textParam } from "#/lib/search-params.ts";
+import { isSafeExternalLink } from "#/lib/url.ts";
 import type { ImportSummary } from "#/lib/word-import.ts";
 import type { WordView } from "#/lib/words.ts";
 import {
@@ -27,14 +28,15 @@ const SCOPE_LABELS: Record<Scope, string> = {
   unserved: "لم تُستخدم",
 };
 
-const wordsSearch = z.object({
-  q: z.string().catch("").default(""),
-  scope: z.enum(SCOPES).catch("all").default("all"),
-  page: z.coerce.number().int().min(1).catch(1).default(1),
-});
-
 export const Route = createFileRoute("/admin/words")({
-  validateSearch: wordsSearch,
+  validateSearch: (
+    search: { q?: unknown; scope?: unknown; page?: unknown } & SearchSchemaInput,
+  ) => ({
+    // The server refuses a longer search term.
+    q: textParam(search.q, 200),
+    scope: enumParam(search.scope, SCOPES, "all"),
+    page: pageParam(search.page),
+  }),
   loaderDeps: ({ search }) => search,
   loader: async ({ deps }) => {
     const filter =
@@ -243,7 +245,7 @@ function WordsPage() {
                       </td>
                       <td className="text-lg font-bold tracking-widest">
                         {word.text}
-                        {word.link ? (
+                        {isSafeExternalLink(word.link) ? (
                           <a
                             href={word.link}
                             target="_blank"

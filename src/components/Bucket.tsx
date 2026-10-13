@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { memo, useId } from "react";
 
 import {
   BUCKET_EMPTY,
@@ -76,7 +76,12 @@ const RESULT_LABEL: Record<BucketResult, string> = {
   absent: "غير موجود",
 };
 
-export function Bucket({
+/**
+ * Memoised: a board and keypad draw nearly sixty of these, and a keystroke
+ * changes at most one of them. Every prop is a primitive, so the shallow
+ * comparison is exact.
+ */
+export const Bucket = memo(function Bucket({
   letter,
   result,
   stagger = 0,
@@ -201,4 +206,4 @@ export function Bucket({
       </text>
     </svg>
   );
-}
+});

@@ -17,8 +17,9 @@ import { z } from "zod";
 import { isPlayableWord, scoreGuess, toWordLetters, type LetterState } from "#/lib/arabic.ts";
 import { MAX_ATTEMPTS, WORD_LETTER_COUNT } from "#/lib/config.ts";
 import { optionalEnv } from "#/lib/env.ts";
+import { signProgress, verifyProgress } from "#/lib/progress.ts";
 import { dayEndUtc, dayStartUtc, isDateKey, sudanDateKey, type DateKey } from "#/lib/sudan-time.ts";
-import { getSettings, getWordByText, resolveDay, wordExists } from "#/lib/words.ts";
+import { getGameSecret, getSettings, getWordByText, resolveDay, wordExists } from "#/lib/words.ts";
 
 /**
  * What the player's board can be. A player only ever asks about today, and today
@@ -56,6 +57,8 @@ export type GuessPayload =
       /** True once the game cannot continue: solved, or out of attempts. */
       finished: boolean;
       attemptsUsed: number;
+      /** Proof of `attemptsUsed`, to send back with the next guess. */
+      progress: string;
       /** Present only when the game is over. */
       answer: string | null;
       /** Optional operator-supplied page about the word, revealed with the answer. */
@@ -93,18 +96,26 @@ export const getPuzzle = createServerFn({ method: "GET" }).handler(
 );
 
 const guessInput = z.object({
-  dateKey: z.string(),
-  guess: z.string(),
+  dateKey: z.string().max(10),
+  // Generous enough for diacritics and dialect letters, small enough to refuse junk.
+  guess: z.string().max(64),
   /** Guesses already made before this one. */
-  attemptsSoFar: z.number().int().min(0).max(MAX_ATTEMPTS),
+  attemptsSoFar: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_ATTEMPTS - 1),
+  /** The `progress` token from the previous guess; absent before the first. */
+  progress: z.string().max(128).optional(),
 });
 
 /**
  * Marks one guess.
  *
- * `attemptsSoFar` is the only thing that unlocks the answer, which is a
- * deliberate trade: it keeps the word off the wire while the game is running
- * without needing accounts to track player progress server-side.
+ * The attempt count is what unlocks the answer, so the server does not take the
+ * client's word for it: every count past zero must come with the token the
+ * previous guess returned. That keeps the word off the wire while the game is
+ * running without needing accounts to track player progress server-side.
  */
 export const submitGuess = createServerFn({ method: "POST" })
   .validator(guessInput)
@@ -124,15 +135,7 @@ export const submitGuess = createServerFn({ method: "POST" })
       };
     }
 
-    const resolution = await resolveDay(dateKey);
-    if (resolution.status !== "ready") {
-      return {
-        ok: false,
-        reason: "no-words",
-        message: "لا توجد كلمة لهذا اليوم. تواصل مع مشرف الموقع.",
-      };
-    }
-
+    // Checked before anything touches the database.
     if (!isPlayableWord(guess)) {
       return {
         ok: false,
@@ -141,7 +144,28 @@ export const submitGuess = createServerFn({ method: "POST" })
       };
     }
 
-    const settings = await getSettings();
+    const [resolution, settings, secret] = await Promise.all([
+      resolveDay(dateKey),
+      getSettings(),
+      getGameSecret(),
+    ]);
+
+    if (!verifyProgress(secret, dateKey, data.attemptsSoFar, data.progress)) {
+      return {
+        ok: false,
+        reason: "bad-progress",
+        message: "تعذّر التحقق من محاولاتك السابقة، فبدأت اللعبة من جديد.",
+      };
+    }
+
+    if (resolution.status !== "ready") {
+      return {
+        ok: false,
+        reason: "no-words",
+        message: "لا توجد كلمة لهذا اليوم. تواصل مع مشرف الموقع.",
+      };
+    }
+
     if (settings.enforceDictionary && !(await wordExists(guess))) {
       return { ok: false, reason: "not-a-word", message: "هذه الكلمة غير موجودة في القاموس" };
     }
@@ -150,7 +174,7 @@ export const submitGuess = createServerFn({ method: "POST" })
     const states = scoreGuess(guess, answer);
     const letters = toWordLetters(guess).map((letter) => letter.display);
     const solved = states.every((state) => state === "correct");
-    const attemptsUsed = Math.min(MAX_ATTEMPTS, data.attemptsSoFar + 1);
+    const attemptsUsed = data.attemptsSoFar + 1;
     const finished = solved || attemptsUsed >= MAX_ATTEMPTS;
 
     // The link is looked up now rather than stored on the day, so a page added
@@ -164,6 +188,7 @@ export const submitGuess = createServerFn({ method: "POST" })
       solved,
       finished,
       attemptsUsed,
+      progress: signProgress(secret, dateKey, attemptsUsed),
       answer: finished ? answer : null,
       link: revealed?.link ?? null,
     };

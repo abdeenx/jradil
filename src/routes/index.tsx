@@ -1,5 +1,5 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { Bucket } from "#/components/Bucket.tsx";
 import { Countdown } from "#/components/Countdown.tsx";
@@ -27,9 +27,15 @@ function GamePage() {
     void router.invalidate();
   }, [router]);
 
+  // The game object is new on every render; the listener reads the latest one
+  // through a ref so it is attached once rather than on every keystroke.
+  const gameRef = useRef(game);
+  gameRef.current = game;
+
   // Physical keyboard support: Arabic letters, Enter and Backspace.
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      const game = gameRef.current;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (game.status !== "playing" || game.resultOpen) return;
 
@@ -53,7 +59,7 @@ function GamePage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [game]);
+  }, []);
 
   const playable = puzzle.state === "ready";
 
@@ -67,7 +73,6 @@ function GamePage() {
           <h1 className="text-base font-bold">{shortDateKey(puzzle.dateKey)}</h1>
           <Countdown
             msRemaining={puzzle.msRemaining}
-            endsAt={puzzle.endsAt}
             label={NEXT_WORD_LABEL}
             onElapsed={handleElapsed}
           />

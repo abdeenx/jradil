@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { keypadStates, type LetterState } from "#/lib/arabic.ts";
 import type { GameRow, GameStatus } from "#/lib/game.ts";
+import { isSafeExternalLink } from "#/lib/url.ts";
 import { submitGuess, type PuzzlePayload } from "#/server/puzzle.ts";
 
 const STORAGE_KEY = "jradil:daily:v1";
@@ -24,10 +25,27 @@ type StoredGame = {
   answer: string | null;
   /** Kept so the reveal survives a page reload without asking the server again. */
   link: string | null;
+  /** The server's token for `rows.length` guesses, sent with the next guess. */
+  progress: string | null;
 };
 
 function emptyGame(dateKey: string): StoredGame {
-  return { dateKey, rows: [], status: "playing", answer: null, link: null };
+  return { dateKey, rows: [], status: "playing", answer: null, link: null, progress: null };
+}
+
+const LETTER_STATES: ReadonlySet<unknown> = new Set(["correct", "present", "absent"]);
+
+/** Storage is outside our control, so a row is only trusted once it has the right shape. */
+function isGameRow(value: unknown): value is GameRow {
+  if (typeof value !== "object" || value === null) return false;
+  const { letters, states } = value as Partial<GameRow>;
+  return (
+    Array.isArray(letters) &&
+    Array.isArray(states) &&
+    letters.length === states.length &&
+    letters.every((letter) => typeof letter === "string") &&
+    states.every((state) => LETTER_STATES.has(state))
+  );
 }
 
 function readStored(dateKey: string): StoredGame {
@@ -38,12 +56,14 @@ function readStored(dateKey: string): StoredGame {
     const parsed = JSON.parse(raw) as Partial<StoredGame>;
     // Progress belongs to one day only: a new puzzle starts from scratch.
     if (parsed.dateKey !== dateKey || !Array.isArray(parsed.rows)) return emptyGame(dateKey);
+    if (!parsed.rows.every(isGameRow)) return emptyGame(dateKey);
     return {
       dateKey,
-      rows: parsed.rows as GameRow[],
+      rows: parsed.rows,
       status: parsed.status === "won" || parsed.status === "lost" ? parsed.status : "playing",
       answer: typeof parsed.answer === "string" ? parsed.answer : null,
-      link: typeof parsed.link === "string" ? parsed.link : null,
+      link: isSafeExternalLink(parsed.link) ? parsed.link : null,
+      progress: typeof parsed.progress === "string" ? parsed.progress : null,
     };
   } catch {
     return emptyGame(dateKey);
@@ -132,10 +152,14 @@ export function useDailyGame(puzzle: PuzzlePayload): DailyGame {
         dateKey: puzzle.dateKey,
         guess,
         attemptsSoFar: game.rows.length,
+        progress: game.progress ?? undefined,
       },
     })
       .then((result) => {
         if (!result.ok) {
+          // Progress the server cannot vouch for (from before tokens existed, or
+          // edited by hand) cannot be continued, so the day starts over.
+          if (result.reason === "bad-progress") persist(emptyGame(puzzle.dateKey));
           setMessage(result.message);
           return;
         }
@@ -149,6 +173,7 @@ export function useDailyGame(puzzle: PuzzlePayload): DailyGame {
           status,
           answer: result.answer,
           link: result.link,
+          progress: result.progress,
         });
         setCurrent([]);
         if (status !== "playing") setResultOpen(true);
@@ -160,7 +185,7 @@ export function useDailyGame(puzzle: PuzzlePayload): DailyGame {
         busyRef.current = false;
         setBusy(false);
       });
-  }, [activeRow, current, game.rows, persist, puzzle.dateKey, puzzle.letterCount]);
+  }, [activeRow, current, game.progress, game.rows, persist, puzzle.dateKey, puzzle.letterCount]);
 
   // Auto-clear the transient hint.
   useEffect(() => {
@@ -170,6 +195,8 @@ export function useDailyGame(puzzle: PuzzlePayload): DailyGame {
   }, [message]);
 
   const keyStates = useMemo(() => keypadStates(game.rows), [game.rows]);
+  const openResult = useCallback(() => setResultOpen(true), []);
+  const closeResult = useCallback(() => setResultOpen(false), []);
 
   return {
     rows: game.rows,
@@ -186,7 +213,7 @@ export function useDailyGame(puzzle: PuzzlePayload): DailyGame {
     commit,
     dismissMessage,
     resultOpen,
-    openResult: () => setResultOpen(true),
-    closeResult: () => setResultOpen(false),
+    openResult,
+    closeResult,
   };
 }

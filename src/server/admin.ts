@@ -13,6 +13,7 @@ import {
   isAdminConfigured,
   issueSession,
   loginBlockedFor,
+  loginIdentifier,
   readSession,
   recordLoginFailure,
   recordLoginSuccess,
@@ -68,7 +69,7 @@ export const adminLogin = createServerFn({ method: "POST" })
         };
       }
 
-      const identifier = "operator";
+      const identifier = loginIdentifier();
       const blockedFor = loginBlockedFor(identifier);
       if (blockedFor > 0) {
         const minutes = Math.ceil(blockedFor / 60_000);
@@ -135,6 +136,11 @@ export const getDashboard = createServerFn({ method: "GET" })
 
 // ---------------------------------------------------------------- words --
 
+/** A Mongo ObjectId, checked here so a malformed id is a validation error rather than a CastError. */
+const wordId = z.string().regex(/^[a-f\d]{24}$/i);
+
+const dateKeyInput = z.string().length(10);
+
 const wordPatch = {
   dialect: z.boolean().optional(),
   pool: z.boolean().optional(),
@@ -171,7 +177,7 @@ export const adminAddWord = createServerFn({ method: "POST" })
   });
 
 export const adminUpdateWord = createServerFn({ method: "POST" })
-  .validator(z.object({ id: z.string().min(1), ...wordPatch }))
+  .validator(z.object({ id: wordId, ...wordPatch }))
   .handler(async ({ data }) => {
     requireAdmin();
     const { id, ...patch } = data;
@@ -179,7 +185,7 @@ export const adminUpdateWord = createServerFn({ method: "POST" })
   });
 
 export const adminDeleteWord = createServerFn({ method: "POST" })
-  .validator(z.object({ id: z.string().min(1) }))
+  .validator(z.object({ id: wordId }))
   .handler(async ({ data }) => {
     requireAdmin();
     return deleteWord(data.id);
@@ -188,7 +194,7 @@ export const adminDeleteWord = createServerFn({ method: "POST" })
 export const adminBulkUpdateWords = createServerFn({ method: "POST" })
   .validator(
     z.object({
-      ids: z.array(z.string().min(1)).max(2000),
+      ids: z.array(wordId).max(2000),
       dialect: z.boolean().optional(),
       pool: z.boolean().optional(),
     }),
@@ -244,7 +250,7 @@ export const adminPreviewWord = createServerFn({ method: "POST" })
 export const adminSetDayWord = createServerFn({ method: "POST" })
   .validator(
     z.object({
-      dateKey: z.string().min(10).max(10),
+      dateKey: dateKeyInput,
       text: z.string().min(1).max(100),
       allowNonDialect: z.boolean().optional(),
       createIfMissing: z.boolean().optional(),
@@ -265,7 +271,7 @@ export const adminSetDayWord = createServerFn({ method: "POST" })
   });
 
 export const adminClearDayWord = createServerFn({ method: "POST" })
-  .validator(z.object({ dateKey: z.string().min(10).max(10) }))
+  .validator(z.object({ dateKey: dateKeyInput }))
   .handler(async ({ data }) => {
     requireAdmin();
     if (!isDateKey(data.dateKey)) {
@@ -277,8 +283,8 @@ export const adminClearDayWord = createServerFn({ method: "POST" })
 export const adminListDays = createServerFn({ method: "POST" })
   .validator(
     z.object({
-      from: z.string().optional(),
-      to: z.string().optional(),
+      from: dateKeyInput.optional(),
+      to: dateKeyInput.optional(),
       page: z.number().int().min(1).max(10_000).optional(),
       pageSize: z.number().int().min(1).max(200).optional(),
     }),
