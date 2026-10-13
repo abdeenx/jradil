@@ -1,0 +1,163 @@
+/**
+ * The public game API.
+ *
+ * The answer never leaves the server until the game is over. The client is told
+ * how long the word is and how many tries it gets, sends each guess for
+ * marking, and only learns the word when it has won or run out of attempts.
+ *
+ * Calling `getPuzzle` is also what triggers the automatic pick for the day, so
+ * no scheduler is required: the first player after Sudan midnight materialises
+ * the word, and the unique day record guarantees everyone after them sees the
+ * same one.
+ */
+
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+
+import { isPlayableWord, scoreGuess, toWordLetters, type LetterState } from "#/lib/arabic.ts";
+import { MAX_ATTEMPTS, WORD_LETTER_COUNT } from "#/lib/config.ts";
+import { dayEndUtc, dayStartUtc, isDateKey, sudanDateKey, type DateKey } from "#/lib/sudan-time.ts";
+import { getSettings, getWordByText, resolveDay, wordExists } from "#/lib/words.ts";
+
+/**
+ * What the player's board can be. A player only ever asks about today, and today
+ * either has a word or does not, so there are only two outcomes.
+ */
+export type PuzzleState = "ready" | "no-words";
+
+export type PuzzlePayload = {
+  /** The day being played, in Sudan time. */
+  dateKey: DateKey;
+  /** The server's current Sudan day, so a stale tab can resync at midnight. */
+  todayKey: DateKey;
+  letterCount: number;
+  maxAttempts: number;
+  /** ISO instants for when this puzzle opened and when the next one opens. */
+  startsAt: string;
+  endsAt: string;
+  /** Milliseconds left on the server's clock when this payload was produced. */
+  msRemaining: number;
+  state: PuzzleState;
+};
+
+export type GuessPayload =
+  | {
+      ok: true;
+      states: LetterState[];
+      /** The letters the player typed, for display in the row. */
+      letters: string[];
+      solved: boolean;
+      /** True once the game cannot continue: solved, or out of attempts. */
+      finished: boolean;
+      attemptsUsed: number;
+      /** Present only when the game is over. */
+      answer: string | null;
+      /** Optional operator-supplied page about the word, revealed with the answer. */
+      link: string | null;
+    }
+  | { ok: false; reason: string; message: string };
+
+function puzzlePayload(dateKey: DateKey, state: PuzzleState, now: Date): PuzzlePayload {
+  return {
+    dateKey,
+    todayKey: sudanDateKey(now),
+    letterCount: WORD_LETTER_COUNT,
+    maxAttempts: MAX_ATTEMPTS,
+    startsAt: dayStartUtc(dateKey).toISOString(),
+    endsAt: dayEndUtc(dateKey).toISOString(),
+    msRemaining: Math.max(0, dayEndUtc(dateKey).getTime() - now.getTime()),
+    state,
+  };
+}
+
+/** Everything the board needs before the first guess, and nothing that spoils it. */
+export const getPuzzle = createServerFn({ method: "GET" }).handler(
+  async (): Promise<PuzzlePayload> => {
+    const now = new Date();
+    const today = sudanDateKey(now);
+    const resolution = await resolveDay(today);
+
+    if (resolution.status === "ready") {
+      return puzzlePayload(resolution.day.dateKey, "ready", now);
+    }
+    // Today, with nothing left to draw from: the pool has run dry.
+    return puzzlePayload(today, "no-words", now);
+  },
+);
+
+const guessInput = z.object({
+  dateKey: z.string(),
+  guess: z.string(),
+  /** Guesses already made before this one. */
+  attemptsSoFar: z.number().int().min(0).max(MAX_ATTEMPTS),
+});
+
+/**
+ * Marks one guess.
+ *
+ * `attemptsSoFar` is the only thing that unlocks the answer, which is a
+ * deliberate trade: it keeps the word off the wire while the game is running
+ * without needing accounts to track player progress server-side.
+ */
+export const submitGuess = createServerFn({ method: "POST" })
+  .validator(guessInput)
+  .handler(async ({ data }): Promise<GuessPayload> => {
+    const { dateKey, guess } = data;
+
+    if (!isDateKey(dateKey)) {
+      return { ok: false, reason: "bad-date", message: "تاريخ غير صالح" };
+    }
+
+    const today = sudanDateKey();
+    if (dateKey !== today) {
+      return {
+        ok: false,
+        reason: "wrong-day",
+        message: "انتهى هذا اليوم. حدِّث الصفحة للعب كلمة اليوم الجديدة.",
+      };
+    }
+
+    const resolution = await resolveDay(dateKey);
+    if (resolution.status !== "ready") {
+      return {
+        ok: false,
+        reason: "no-words",
+        message: "لا توجد كلمة لهذا اليوم. تواصل مع مشرف الموقع.",
+      };
+    }
+
+    if (!isPlayableWord(guess)) {
+      return {
+        ok: false,
+        reason: "bad-length",
+        message: `الكلمة يجب أن تكون ${WORD_LETTER_COUNT} حروف عربية بالضبط`,
+      };
+    }
+
+    const settings = await getSettings();
+    if (settings.enforceDictionary && !(await wordExists(guess))) {
+      return { ok: false, reason: "not-a-word", message: "هذه الكلمة غير موجودة في القاموس" };
+    }
+
+    const answer = resolution.day.wordText;
+    const states = scoreGuess(guess, answer);
+    const letters = toWordLetters(guess).map((letter) => letter.display);
+    const solved = states.every((state) => state === "correct");
+    const attemptsUsed = Math.min(MAX_ATTEMPTS, data.attemptsSoFar + 1);
+    const finished = solved || attemptsUsed >= MAX_ATTEMPTS;
+
+    // The link is looked up now rather than stored on the day, so a page added
+    // after the day was served still reaches the player.
+    const revealed = finished ? await getWordByText(answer) : null;
+
+    return {
+      ok: true,
+      states,
+      letters,
+      solved,
+      finished,
+      attemptsUsed,
+      answer: finished ? answer : null,
+      link: revealed?.link ?? null,
+    };
+  });

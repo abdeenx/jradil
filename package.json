@@ -9,7 +9,8 @@
     "dev": "vp dev --port 3000",
     "generate-routes": "tsr generate",
     "build": "vp build",
-    "preview": "vp preview"
+    "preview": "vp preview",
+    "db:import": "node scripts/import-words.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
@@ -17,10 +18,12 @@
     "@tanstack/react-router": "1.170.44",
     "@tanstack/react-router-devtools": "1.167.2",
     "@tanstack/react-start": "1.169.1",
+    "mongoose": "^9.11.1",
     "nitro": "3.0.260610-beta",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "tailwindcss": "^4.1.18"
+    "tailwindcss": "^4.1.18",
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@tanstack/devtools-vite": "0.8.5",
@@ -29,6 +32,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.1",
+    "daisyui": "^5.7.47",
     "typescript": "^6.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:"

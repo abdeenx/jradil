@@ -1,5 +1,60 @@
 @import "tailwindcss";
 
+@plugin "daisyui" {
+  themes:
+    light --default,
+    dark;
+}
+
+/*
+  The terracotta accent, carried into both themes so the brand survives the
+  switch. The rest of each palette stays daisyUI's.
+*/
+@plugin "daisyui/theme" {
+  name: "light";
+  default: true;
+  --color-primary: oklch(56% 0.15 42);
+  --color-primary-content: oklch(98% 0.01 42);
+  --color-secondary: oklch(58% 0.11 195);
+  --color-secondary-content: oklch(98% 0.01 195);
+}
+
+@plugin "daisyui/theme" {
+  name: "dark";
+  --color-primary: oklch(72% 0.13 42);
+  --color-primary-content: oklch(18% 0.03 42);
+  --color-secondary: oklch(72% 0.1 195);
+  --color-secondary-content: oklch(18% 0.03 195);
+}
+
+@theme {
+  --animate-pop: jradil-pop 260ms ease-out both;
+  --animate-rise: jradil-rise 220ms ease-out both;
+}
+
+@keyframes jradil-pop {
+  from {
+    transform: scale(0.94);
+  }
+  60% {
+    transform: scale(1.04);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes jradil-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 * {
   box-sizing: border-box;
 }

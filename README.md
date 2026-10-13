@@ -1,192 +1,216 @@
-Welcome to your new TanStack Start app!
+# jradil · جرادل
 
-# Getting Started
+A daily word game in the spirit of Wordle, for Sudanese Arabic. Five letters, six
+guesses, one word per day, and the whole interface in Modern Standard Arabic
+(`dir="rtl"`).
 
-To run this application:
+The operator can pin the word of the day from an admin dashboard. If they have not
+pinned one by midnight, the app picks one for them.
+
+## The rules the app enforces
+
+- **All words are five letters**, measured after folding Arabic spelling
+  variants, so `مدرسة` and `مدرسه` count the same.
+- **The clock is Sudan time** — UTC+2, fixed, no daylight saving. A "day" is the
+  Sudan calendar day, stored as `YYYY-MM-DD`.
+- **One word per day, fixed once the day begins.** A unique index on the day
+  record guarantees every player sees the same word and that a second request
+  cannot assign a different one.
+- **If the operator pins a word before midnight, that word is used.**
+- **Otherwise, the first request after midnight picks a random word from the
+  candidate pool** — the operator's shortlist of Sudanese words.
+- **An automatic pick is never repeated.** Once a word has been served it is
+  retired from the pool permanently. The operator can still choose it by hand.
+- Words are tracked for when they were served: each day record keeps the word and
+  who chose it, and the word keeps its first and last served dates.
+- **A word may carry a link** — a dictionary entry or article — which the player
+  is offered once the puzzle is over.
+
+Two deliberate edge cases:
+
+- If the candidate pool runs dry, the day has no word. The dashboard says so
+  loudly rather than repeating a word.
+- A day nobody played is **not** back-filled, so a quiet week does not silently
+  consume the pool.
+
+## Data model
+
+Everything lives in **one MongoDB collection, `jradil`**. Three record shapes
+share it, told apart by a `kind` field (Mongoose discriminators, with the
+discriminator key renamed from `__t` to `kind`):
+
+| `kind`     | What it is                         | Key fields                                                                                                                            |
+| ---------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `word`     | One valid five-letter word         | `text`, `normalized`, `dialect`, `pool`, `link`, `notes`, `assignedDateKey`, `firstServedDateKey`, `lastServedDateKey`, `timesServed` |
+| `day`      | The puzzle served on one Sudan day | `dateKey`, `wordId`, `wordText`, `source` (`admin` \| `auto`), `revisions[]`                                                          |
+| `settings` | The operator settings singleton    | `key`, `poolSize`, `enforceDictionary`                                                                                                |
+
+Uniqueness is scoped per shape with partial indexes:
+
+- `word_normalized_unique` — one document per folded spelling
+- `day_datekey_unique` — one puzzle per day, ever
+- `settings_key_unique` — one settings document
+
+The two word flags mean different things and are worth keeping apart:
+
+- **`dialect`** — a Sudanese word, and therefore eligible to be the word of the
+  day. Everything else in the collection is the guess list: valid words players
+  can type but never be given.
+- **`pool`** — shortlisted for the automatic pick. A subset of `dialect`; setting
+  it implies the dialect flag, and clearing the dialect flag clears it too.
+
+## Getting started
 
 ```bash
-pnpm install
-pnpm dev
+vp install
+cp .env.example .env      # then fill it in
+vp dev
 ```
 
-# Building For Production
+### Environment
 
-To build this application for production:
+| Variable               | Required     | Purpose                                                                                                         |
+| ---------------------- | ------------ | --------------------------------------------------------------------------------------------------------------- |
+| `MONGODB_URI`          | yes          | Connection string. Add a database name to it — a URI without one makes MongoDB use its default `test` database. |
+| `MONGODB_DB`           | no           | Pins the database name, overriding the URI.                                                                     |
+| `ADMIN_PASSWORD`       | for `/admin` | The operator's password. Without it the dashboard refuses to open rather than falling back to a default.        |
+| `ADMIN_SESSION_SECRET` | no           | Signing key for the session cookie. Defaults to `ADMIN_PASSWORD`.                                               |
 
-```bash
-pnpm build
+Nothing else. The database needs no manual setup: the collection and its indexes
+are created on first use, so the whole product can be operated without opening
+Atlas.
+
+## Admin dashboard
+
+`/admin`, protected by `ADMIN_PASSWORD`. The session is a signed, `httpOnly`
+cookie lasting twelve hours, and repeated wrong passwords are throttled.
+
+The dashboard is built around one question — **is tomorrow covered?** — and it
+answers it in a single line. Everything else is either secondary or folded away.
+
+- **كلمة الغد** — the day's job. Either the pinned word, or a note that the app
+  will pick automatically at midnight along with how many candidates are left.
+  The picker opens on demand.
+- **الاختيار التلقائي** — how much runway the automatic pick has, expressed in
+  days rather than rows. One button refills the pool to its target from unused
+  Sudanese words. The target is editable here, next to the thing it controls.
+- **كلمة اليوم** — read-only, with the escape hatch folded behind a disclosure,
+  because changing it affects players who are already playing.
+
+Read-only detail lives in collapsed sections: the last eight served days, and the
+dictionary totals.
+
+### `/admin/words`
+
+The dictionary, which is loaded in bulk and then left alone.
+
+- **إضافة كلمات** — one box for everything: a single word, a pasted list, CSV or
+  JSON. Two switches describe the phase being loaded.
+- Search and filter (all / Sudanese / in the pool / served / unserved).
+- Bulk marking for a whole selection: make Sudanese, add to the pool, or strip
+  both flags.
+- Per-row **بيانات** opens the metadata editor: the learn-more link the player
+  will see, and a private note.
+- The dictionary-validation switch, next to the count of words it applies to.
+
+## Loading the dictionary in phases
+
+Imports are idempotent: words match on their folded spelling and flags are only
+overwritten when the payload states them explicitly, so re-running a file never
+undoes marking work.
+
+The phase switches are the two steps a dictionary is actually built in:
+
+1. **General Arabic** — switch _كلمات سودانية_ off. The words become the guess
+   list: typeable, never served.
+2. **Sudanese** — switch it on, and optionally _أضفها إلى قائمة الاختيار
+   التلقائي_ to also shortlist them for the automatic pick.
+
+A row can override the switches by stating its own flags, so one file can carry
+both kinds:
+
+```csv
+word,dialect,pool,link
+طنجره,1,1,https://ar.wiktionary.org/wiki/طنجرة
+عربيه,1,0,
+مدرسه,0,0,
 ```
 
-## Styling
+```json
+[
+  {
+    "text": "طنجره",
+    "dialect": true,
+    "pool": true,
+    "link": "https://ar.wiktionary.org/wiki/طنجرة"
+  },
+  { "text": "مدرسه", "dialect": false }
+]
+```
 
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
-
-### Removing Tailwind CSS
-
-If you prefer not to use Tailwind CSS:
-
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Remove `@tailwindcss/vite` and `tailwindcss` from `package.json`
-
-## Deploy with Nitro
-
-This project uses Nitro as a generic server adapter, so it can run on any Node-compatible host.
+From the shell, for large files:
 
 ```bash
-npm run build
+vp run db:import -- words.csv
+node scripts/import-words.ts words.json
+cat words.txt | node scripts/import-words.ts -
+```
+
+Rows that are not exactly five Arabic letters are skipped and reported, not
+silently dropped.
+
+## The learn-more link
+
+A word can point at a page about itself — a Wiktionary entry, an article. When the
+puzzle ends, won or lost, the result panel offers the player _اقرأ عن الكلمة_.
+
+Only `http` and `https` are accepted; anything else is stored as no link, because
+the value goes straight into an `href`. The link is read at reveal time rather
+than copied onto the day, so adding one to a word that was served yesterday still
+reaches today's players.
+
+## Scheduled resolution
+
+None is needed. `resolveDay` runs lazily, so the first request after midnight
+fixes the day's word, and the unique day index keeps it stable for everyone
+after. The dashboard resolves today on load, so a day is materialised the first
+time the operator looks at it.
+
+## Checks
+
+```bash
+vp check    # format, lint, type check
+vp test     # unit tests, plus MongoDB integration tests when MONGODB_URI is set
+vp build
+```
+
+The integration tests create their own scratch database and drop it afterwards,
+so the configured database is never touched. They skip themselves when
+`MONGODB_URI` is absent.
+
+## Notes on Arabic
+
+`src/lib/arabic.ts` folds the spelling differences an Arabic reader ignores —
+`أ إ آ ا`, `ة ه`, `ى ي`, `ؤ و` — and the letters Sudanese dialect uses for /g/
+and /v/ (`ڨ گ ڤ پ چ`). Diacritics, tatweel and zero-width marks are removed.
+
+Both the guess and the answer are folded before comparison, so typing `ا` where
+the stored word has `أ` counts as correct. Letter marking runs on the folded
+letters, so a repeated letter is only marked as often as it truly occurs in the
+answer.
+
+The tiles and the on-screen keypad show only the 28 base letters, which is why
+the keypad has three rows of ten, nine and nine rather than the full Arabic
+keyboard.
+
+## Deployment
+
+Nitro builds a self-contained Node server:
+
+```bash
+vp build
 node dist/server/index.mjs
 ```
 
-The build output is a self-contained Node server. To deploy, push the `dist/` directory to your host (Render, Fly.io, your own VPS, etc.) and run the server command above.
-
-For host-specific presets (Vercel, Netlify, Cloudflare, AWS Lambda, etc.) and tuning, see https://v3.nitro.build/deploy.
-
-## Routing
-
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
-
-### Adding A Route
-
-To add a new route to your application just add a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from "@tanstack/react-router";
-```
-
-Then anywhere in your JSX you can use it like so:
-
-```tsx
-<Link to="/about">About</Link>
-```
-
-This will create a link that will navigate to the `/about` route.
-
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
-
-### Using A Layout
-
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
-
-Here is an example layout that includes a header:
-
-```tsx
-import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
-
-export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "My App" },
-    ],
-  }),
-  shellComponent: ({ children }) => (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <header>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </nav>
-        </header>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  ),
-});
-```
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-## Server Functions
-
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
-
-```tsx
-import { createServerFn } from "@tanstack/react-start";
-
-const getServerTime = createServerFn({
-  method: "GET",
-}).handler(async () => {
-  return new Date().toISOString();
-});
-
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState("");
-
-  useEffect(() => {
-    getServerTime().then(setTime);
-  }, []);
-
-  return <div>Server time: {time}</div>;
-}
-```
-
-## API Routes
-
-You can create API routes by using the `server` property in your route definitions:
-
-```tsx
-import { createFileRoute } from "@tanstack/react-router";
-import { json } from "@tanstack/react-start";
-
-export const Route = createFileRoute("/api/hello")({
-  server: {
-    handlers: {
-      GET: () => json({ message: "Hello, World!" }),
-    },
-  },
-});
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from "@tanstack/react-router";
-
-export const Route = createFileRoute("/people")({
-  loader: async () => {
-    const response = await fetch("https://swapi.dev/api/people");
-    return response.json();
-  },
-  component: PeopleComponent,
-});
-
-function PeopleComponent() {
-  const data = Route.useLoaderData();
-  return (
-    <ul>
-      {data.results.map((person) => (
-        <li key={person.name}>{person.name}</li>
-      ))}
-    </ul>
-  );
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).
+Push `dist/` to any Node host and set the environment variables there. See
+<https://v3.nitro.build/deploy> for host-specific presets.
