@@ -9,12 +9,22 @@ import { ResultDialog } from "#/components/ResultDialog.tsx";
 import { SiteHeader } from "#/components/SiteHeader.tsx";
 import { useDailyGame } from "#/hooks/useDailyGame.ts";
 import { isBaseLetter, toLetters } from "#/lib/arabic.ts";
-import { APP_NAME_AR, NEXT_WORD_LABEL } from "#/lib/config.ts";
+import { APP_NAME_AR, NEXT_WORD_LABEL, TAGLINE_AR } from "#/lib/config.ts";
+import { socialMeta } from "#/lib/social.ts";
 import { shortDateKey } from "#/lib/sudan-time.ts";
 import { getPuzzle } from "#/server/puzzle.ts";
 
 export const Route = createFileRoute("/")({
   loader: () => getPuzzle(),
+  /**
+   * Social cards belong to the game page, which is what people share, rather
+   * than to the admin screens behind it.
+   *
+   * The address comes from the loader, so it is absolute without a second
+   * mechanism for reading the environment, and identical on the server and in
+   * the browser — the tags a crawler reads are the ones rendered here.
+   */
+  head: ({ loaderData }) => ({ meta: socialMeta(loaderData?.appUrl ?? null) }),
   component: GamePage,
 });
 
@@ -65,7 +75,7 @@ function GamePage() {
 
   return (
     <>
-      <SiteHeader subtitle="كلمة سودانية جديدة كل يوم" />
+      <SiteHeader subtitle={TAGLINE_AR} />
 
       <main className="mx-auto w-full max-w-4xl px-3 pt-5 pb-6">
         {/* The one line of chrome the board needs: which day, and how long is left. */}

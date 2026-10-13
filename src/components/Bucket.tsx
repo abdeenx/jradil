@@ -1,8 +1,16 @@
 import { memo, useId } from "react";
 
 import {
+  BUCKET_BODY_PATH,
   BUCKET_EMPTY,
+  BUCKET_INTERIOR_PATH,
+  BUCKET_LETTER_DY,
+  BUCKET_LETTER_SIZE,
+  BUCKET_LETTER_Y,
   BUCKET_RESIDUE,
+  BUCKET_RIM,
+  BUCKET_VIEWBOX,
+  BUCKET_WATER_PATH,
   bucketAppearance,
   type BucketInk,
   type BucketResult,
@@ -14,38 +22,10 @@ import {
  * files, no icon font, no animation library.
  *
  * The silhouette is deliberately squarish: near-constant width with only a light
- * taper, and a rim band that barely overhangs the body.
- *
- * Geometry, in a 56 × 58 viewBox offset to x=4:
- *   rim      a banded bar across the top; the water never crosses it
- *   body     near-uniform sides pulling in gently to a rounded base
- *   interior an inset copy of the body, used to clip the water so it can never
- *            spill over the rim or through the sides — only down and out through
- *            the bottom, which is what makes the drain read as seeping
- *
- * Every shape is symmetric about x=32, and the viewBox is trimmed to the drawn
- * extent so the buckets sit close together rather than floating in dead space.
+ * taper, and a rim band that barely overhangs the body. The geometry itself
+ * lives in `#/lib/bucket.ts`, shared with the tab icon and the generated social
+ * card so all three draw the same vessel.
  */
-const BODY_PATH = "M9,12 H55 L51,50 Q50.5,55 45.5,55 H18.5 Q13.5,55 13,50 Z";
-const INTERIOR_PATH = "M12,15 H52 L48.5,48 Q48.1,52 44.1,52 H19.9 Q15.9,52 15.5,48 Z";
-
-/**
- * Water: a wave cresting near y=15.5 over a body that runs well past the bottom
- * of the bucket, so sliding the whole group downwards empties it completely.
- */
-const WATER_PATH = "M0,18 q8,-5 16,0 t16,0 t16,0 t16,0 V162 H0 Z";
-
-/**
- * Vertical centre for the letter, and the dy that actually puts a glyph's ink
- * there.
- *
- * Arabic glyphs carry most of their mass above the baseline and a descender
- * below, so a naive "half the font size" nudge lands the letter too low. Measured
- * against the rendered ink, `0.16em` centres it on `y` at any font size.
- */
-const LETTER_Y = 33.5;
-const LETTER_DY = "0.16em";
-
 /**
  * The water colour for each state. "plain" needs no class of its own: it is what
  * the base `.bucket-water` already paints.
@@ -133,7 +113,7 @@ export const Bucket = memo(function Bucket({
 
   return (
     <svg
-      viewBox="4 0 56 58"
+      viewBox={BUCKET_VIEWBOX}
       className={className}
       style={
         {
@@ -146,12 +126,12 @@ export const Bucket = memo(function Bucket({
     >
       <defs>
         <clipPath id={clipId}>
-          <path d={INTERIOR_PATH} />
+          <path d={BUCKET_INTERIOR_PATH} />
         </clipPath>
       </defs>
 
       <path
-        d={BODY_PATH}
+        d={BUCKET_BODY_PATH}
         className={vesselClass}
         style={appearance.animateGray ? settleDelay : undefined}
       />
@@ -173,7 +153,7 @@ export const Bucket = memo(function Bucket({
           }
         >
           <path
-            d={WATER_PATH}
+            d={BUCKET_WATER_PATH}
             className={waterClass}
             style={appearance.animateWaterTone ? settleDelay : undefined}
           />
@@ -182,21 +162,21 @@ export const Bucket = memo(function Bucket({
 
       {/* Painted over the water, so the surface never reaches the brim. */}
       <rect
-        x="7"
-        y="3"
-        width="50"
-        height="10"
-        rx="3"
+        x={BUCKET_RIM.x}
+        y={BUCKET_RIM.y}
+        width={BUCKET_RIM.width}
+        height={BUCKET_RIM.height}
+        rx={BUCKET_RIM.rx}
         className={vesselClass}
         style={appearance.animateGray ? settleDelay : undefined}
       />
 
       <text
         x="32"
-        y={LETTER_Y}
-        dy={LETTER_DY}
+        y={BUCKET_LETTER_Y}
+        dy={BUCKET_LETTER_DY}
         textAnchor="middle"
-        fontSize="26"
+        fontSize={BUCKET_LETTER_SIZE}
         fontWeight="700"
         className={letterClass}
         style={appearance.animateInk ? settleDelay : undefined}

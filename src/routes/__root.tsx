@@ -2,7 +2,7 @@ import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
 
-import { APP_NAME_AR } from "#/lib/config.ts";
+import { DESCRIPTION_AR, TITLE_AR } from "#/lib/config.ts";
 import { THEME_INIT_SCRIPT } from "#/lib/theme.ts";
 
 import appCss from "../styles.css?url";
@@ -12,12 +12,8 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: `${APP_NAME_AR} — كلمة اليوم` },
-      {
-        name: "description",
-        content:
-          "لعبة كلمة اليوم باللهجة السودانية: خمسة حروف، ست محاولات، وكلمة جديدة كل يوم عند منتصف الليل بتوقيت السودان.",
-      },
+      { title: TITLE_AR },
+      { name: "description", content: DESCRIPTION_AR },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

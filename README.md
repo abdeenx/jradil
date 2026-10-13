@@ -188,6 +188,28 @@ The integration tests create their own scratch database and drop it afterwards,
 so the configured database is never touched. They skip themselves when
 `MONGODB_URI` is absent.
 
+## Social preview card
+
+Sharing the link anywhere that unfurls previews shows a 1200×630 card: the app's own
+wordmark — one bucket per letter of `جرادل`, all filled — over the tagline.
+
+`public/og-image.png` is generated, not drawn by hand. Regenerate it after changing the
+name, the tagline or the bucket artwork:
+
+```bash
+vp run og-image
+```
+
+The script builds the card from the geometry in `src/lib/bucket.ts` — the same constants
+the board draws from — and rasterises it with librsvg, which brings pango and harfbuzz so
+the Arabic shapes properly. It reads its output size from `src/lib/social.ts`, which is
+also where the `og:image:width` and `og:image:height` tags come from, so the declaration
+and the file cannot disagree; a test reads the size back out of the PNG.
+
+`APP_URL` has to be set for previews to work: platforms will not resolve a relative
+`og:image`, so the tags use it to build an absolute address. Without it the image is
+emitted as a path, which some clients still resolve and the rest ignore.
+
 ## Sharing a result
 
 The end-of-game panel copies a summary to the clipboard:

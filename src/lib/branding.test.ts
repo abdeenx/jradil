@@ -16,12 +16,18 @@ import { describe, expect, it } from "vite-plus/test";
 import { APP_NAME_AR } from "./config.ts";
 
 const FAVICON = readFileSync(new URL("../../public/favicon.svg", import.meta.url), "utf8");
-const BUCKET = readFileSync(new URL("../components/Bucket.tsx", import.meta.url), "utf8");
+const BUCKET = readFileSync(new URL("./bucket.ts", import.meta.url), "utf8");
 
+/** Pulls the quoted value of a `const NAME = "..."` declaration out of a file. */
 function pathConstant(name: string): string {
-  const match = new RegExp(`const ${name} = "([^"]+)"`).exec(BUCKET);
-  if (!match) throw new Error(`${name} not found in Bucket.tsx`);
-  return match[1];
+  const marker = `const ${name} =`;
+  const at = BUCKET.indexOf(marker);
+  if (at === -1) throw new Error(`${name} not found in bucket.ts`);
+
+  const start = BUCKET.indexOf('"', at) + 1;
+  const end = BUCKET.indexOf('"', start);
+  if (start === 0 || end === -1) throw new Error(`${name} has no quoted value`);
+  return BUCKET.slice(start, end);
 }
 
 describe("the tab icon", () => {
@@ -40,11 +46,11 @@ describe("the tab icon", () => {
 
 describe("the mark's artwork", () => {
   it("uses the same bucket body as the board", () => {
-    expect(FAVICON).toContain(pathConstant("BODY_PATH"));
+    expect(FAVICON).toContain(pathConstant("BUCKET_BODY_PATH"));
   });
 
   it("clips its water to the same interior as the board", () => {
-    expect(FAVICON).toContain(pathConstant("INTERIOR_PATH"));
+    expect(FAVICON).toContain(pathConstant("BUCKET_INTERIOR_PATH"));
   });
 
   it("keeps the water a blue, not the theme's other state colours", () => {

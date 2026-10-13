@@ -18,6 +18,46 @@
 
 export type BucketResult = "correct" | "present" | "absent";
 
+/*
+  The bucket as drawn, in a 56 × 58 frame offset to x=4 (viewBox "4 0 56 58").
+
+  This is the one place the vessel is defined. The board's component, the tab
+  icon and the generated social card all draw it, so a change here moves all
+  three — see `branding.test.ts`, which compares the tab icon against these.
+*/
+export const BUCKET_VIEWBOX = "4 0 56 58";
+
+/** The pail: near-uniform sides pulling in to a rounded base. */
+export const BUCKET_BODY_PATH = "M9,12 H55 L51,50 Q50.5,55 45.5,55 H18.5 Q13.5,55 13,50 Z";
+
+/**
+ * An inset copy of the body, used to clip the water so it can never spill over
+ * the rim or through the sides — only down and out through the bottom, which is
+ * what makes the drain read as seeping.
+ */
+export const BUCKET_INTERIOR_PATH = "M12,15 H52 L48.5,48 Q48.1,52 44.1,52 H19.9 Q15.9,52 15.5,48 Z";
+
+/**
+ * Water: a wave cresting near y=15.5 over a body that runs well past the bottom
+ * of the bucket, so sliding the whole group downwards empties it completely.
+ */
+export const BUCKET_WATER_PATH = "M0,18 q8,-5 16,0 t16,0 t16,0 t16,0 V162 H0 Z";
+
+/** The rim band. Drawn solid where the bucket is small, so it still reads. */
+export const BUCKET_RIM = { x: 7, y: 3, width: 50, height: 10, rx: 3 } as const;
+
+/**
+ * Vertical centre for the letter, and the dy that actually puts a glyph's ink
+ * there.
+ *
+ * Arabic glyphs carry most of their mass above the baseline and a descender
+ * below, so a naive "half the font size" nudge lands the letter too low.
+ * Measured against the rendered ink, `0.16em` centres it on `y` at any size.
+ */
+export const BUCKET_LETTER_Y = 33.5;
+export const BUCKET_LETTER_DY = "0.16em";
+export const BUCKET_LETTER_SIZE = 26;
+
 /** The colour the water settles into. */
 export type BucketWater = "plain" | "present" | "correct" | "gray";
 
