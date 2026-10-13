@@ -1,0 +1,21 @@
+# Rebuilt inside the image.
+node_modules
+.output
+.nitro
+.tanstack
+dist
+dist-ssr
+src/routeTree.gen.ts
+
+# Secrets stay out of the image: the server reads `.env` from its working
+# directory, so a copied file would override nothing but would still ship.
+.env
+.env.*
+!.env.example
+*.local
+
+.git
+.DS_Store
+.vscode
+.opencode
+.claude
