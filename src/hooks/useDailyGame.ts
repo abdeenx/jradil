@@ -88,6 +88,8 @@ export type DailyGame = {
   resultOpen: boolean;
   openResult: () => void;
   closeResult: () => void;
+  /** Counts wins made in this page, so a fresh win can be celebrated. Zero until then. */
+  celebration: number;
 };
 
 export function useDailyGame(puzzle: PuzzlePayload): DailyGame {
@@ -96,6 +98,7 @@ export function useDailyGame(puzzle: PuzzlePayload): DailyGame {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
+  const [celebration, setCelebration] = useState(0);
   const busyRef = useRef(false);
 
   // Restore (or start) the day's progress once running in the browser.
@@ -177,6 +180,7 @@ export function useDailyGame(puzzle: PuzzlePayload): DailyGame {
         });
         setCurrent([]);
         if (status !== "playing") setResultOpen(true);
+        if (status === "won") setCelebration((count) => count + 1);
       })
       .catch(() => {
         setMessage("تعذّر الاتصال بالخادم. حاول مرة أخرى.");
@@ -215,5 +219,6 @@ export function useDailyGame(puzzle: PuzzlePayload): DailyGame {
     resultOpen,
     openResult,
     closeResult,
+    celebration,
   };
 }

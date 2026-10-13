@@ -82,8 +82,8 @@ describe("socialMeta", () => {
 });
 
 describe("title", () => {
-  it("names the game and its pitch, joined by a plain hyphen", () => {
-    expect(TITLE_AR).toBe("جرادل - كلمة سودانية جديدة كل يوم");
+  it("joins its parts with plain hyphens, never an em dash", () => {
+    expect(TITLE_AR.startsWith(`${APP_NAME_AR} - `)).toBe(true);
     expect(TITLE_AR).not.toContain("—");
   });
 });

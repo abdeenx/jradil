@@ -2,6 +2,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef } from "react";
 
 import { Bucket } from "#/components/Bucket.tsx";
+import { Confetti } from "#/components/Confetti.tsx";
 import { Countdown } from "#/components/Countdown.tsx";
 import { GameBoard } from "#/components/GameBoard.tsx";
 import { Keyboard } from "#/components/Keyboard.tsx";
@@ -154,6 +155,9 @@ function GamePage() {
         rows={game.rows}
         onClose={game.closeResult}
       />
+
+      {/* After the dialog on purpose: its effect opens second, so it stacks on top. */}
+      <Confetti burst={game.celebration} />
     </>
   );
 }
