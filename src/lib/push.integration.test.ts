@@ -14,7 +14,9 @@ import { loadEnv } from "./env.ts";
 import { SETTINGS_KEY, Settings, Subscription } from "./jradil-model.ts";
 import { DEFAULT_NOTIFY_TITLE } from "./notifications.ts";
 import {
+  broadcastNotification,
   countSubscriptions,
+  lastBroadcast,
   lastDailyRun,
   pushPublicKey,
   resetDailyNotificationState,
@@ -48,11 +50,16 @@ function target(id: string): PushTarget {
 
 /** A push service that refuses some endpoints with a given status. */
 function stubSender(refuse: Record<string, number> = {}) {
-  const sent: { endpoint: string; payload: unknown; ttl: number }[] = [];
+  const sent: { endpoint: string; payload: unknown; ttl: number; topic?: string }[] = [];
   const send: PushSender = async (to, payload, options) => {
     const id = to.endpoint.split("/").pop() ?? "";
     if (id in refuse) throw Object.assign(new Error("refused"), { statusCode: refuse[id] });
-    sent.push({ endpoint: to.endpoint, payload: JSON.parse(payload), ttl: options.TTL });
+    sent.push({
+      endpoint: to.endpoint,
+      payload: JSON.parse(payload),
+      ttl: options.TTL,
+      topic: options.topic,
+    });
   };
   return { send, sent };
 }
@@ -312,6 +319,107 @@ describe.skipIf(!connectionString)("push notifications against a live MongoDB", 
         ),
       ).resolves.toMatchObject({ ok: false, reason: "gone" });
       expect(await countSubscriptions()).toBe(0);
+    });
+  });
+
+  describe("the operator's send-now", () => {
+    const message = { title: "خبر", body: "كلمات جديدة في القاموس" };
+
+    beforeEach(async () => {
+      await Settings.updateOne(
+        { key: SETTINGS_KEY },
+        { $set: { "notifications.broadcastLockedUntil": null } },
+      );
+    });
+
+    it("refuses when nobody is subscribed, without holding the lock", async () => {
+      const { send, sent } = stubSender();
+      await expect(broadcastNotification(message, new Date(), send)).resolves.toEqual({
+        ok: false,
+        reason: "no-subscribers",
+      });
+      expect(sent).toHaveLength(0);
+      const settings = await Settings.findOne({ key: SETTINGS_KEY }).lean();
+      expect(settings?.notifications?.broadcastLockedUntil ?? null).toBeNull();
+    });
+
+    it("reaches everyone with the operator's words, each under its own tag", async () => {
+      await saveSubscription(target("a"));
+      await saveSubscription(target("b"));
+      const { send, sent } = stubSender();
+      const now = new Date();
+
+      await expect(broadcastNotification(message, now, send)).resolves.toEqual({
+        ok: true,
+        delivered: 2,
+        failed: 0,
+        removed: 0,
+      });
+      expect(sent).toHaveLength(2);
+      expect(sent[0].payload).toEqual({
+        ...message,
+        url: "/",
+        tag: `jradil-broadcast-${now.getTime()}`,
+      });
+      // No topic: a push service must not fold one manual message into another.
+      expect(sent[0].topic).toBeUndefined();
+      expect(sent[0].ttl).toBe(12 * 60 * 60);
+
+      await expect(lastBroadcast()).resolves.toMatchObject({ ...message, delivered: 2 });
+    });
+
+    it("refuses a second send straight after, then allows it once the minute is up", async () => {
+      await saveSubscription(target("a"));
+      const { send, sent } = stubSender();
+
+      await broadcastNotification(message, new Date(), send);
+      const again = await broadcastNotification(message, new Date(), send);
+      expect(again).toMatchObject({ ok: false, reason: "busy" });
+      expect(sent).toHaveLength(1);
+
+      const later = new Date(Date.now() + 61_000);
+      await expect(broadcastNotification(message, later, send)).resolves.toMatchObject({
+        ok: true,
+      });
+      expect(sent).toHaveLength(2);
+    });
+
+    it("sends once when two clicks race", async () => {
+      await saveSubscription(target("a"));
+      const { send, sent } = stubSender();
+      const results = await Promise.all([
+        broadcastNotification(message, new Date(), send),
+        broadcastNotification(message, new Date(), send),
+      ]);
+      expect(results.filter((result) => result.ok)).toHaveLength(1);
+      expect(sent).toHaveLength(1);
+    });
+
+    it("goes out while the daily notification is off, and leaves the daily send alone", async () => {
+      await saveSubscription(target("a"));
+      await updateSettings({ notifications: { enabled: false } });
+      const { send, sent } = stubSender();
+
+      await expect(broadcastNotification(message, new Date(), send)).resolves.toMatchObject({
+        ok: true,
+      });
+      await updateSettings({ notifications: { enabled: true } });
+      await expect(runDailyNotification(todayAt(9, 1), send)).resolves.toMatchObject({
+        status: "sent",
+      });
+      expect(sent).toHaveLength(2);
+    });
+
+    it("prunes dead subscriptions the same way the daily send does", async () => {
+      await saveSubscription(target("ok"));
+      await saveSubscription(target("gone"));
+      const { send } = stubSender({ gone: 410 });
+      await expect(broadcastNotification(message, new Date(), send)).resolves.toMatchObject({
+        ok: true,
+        delivered: 1,
+        removed: 1,
+      });
+      expect(await countSubscriptions()).toBe(1);
     });
   });
 });

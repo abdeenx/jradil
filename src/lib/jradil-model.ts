@@ -121,6 +121,19 @@ const notifyRunSchema = new Schema(
   { _id: false },
 );
 
+/** The last notification the operator sent by hand, for the dashboard. */
+const notifyBroadcastSchema = new Schema(
+  {
+    at: { type: Date, required: true },
+    title: { type: String, required: true },
+    body: { type: String, required: true },
+    delivered: { type: Number, required: true },
+    failed: { type: Number, required: true },
+    removed: { type: Number, required: true },
+  },
+  { _id: false },
+);
+
 const notificationsSchema = new Schema(
   {
     enabled: { type: Boolean, required: true, default: true },
@@ -136,6 +149,12 @@ const notificationsSchema = new Schema(
      */
     lastSentDateKey: { type: String, default: null },
     lastRun: { type: notifyRunSchema, default: null },
+    /**
+     * A manual send holds this until shortly after it finishes. Claimed with a
+     * conditional write, so a double click or a second tab cannot send twice.
+     */
+    broadcastLockedUntil: { type: Date, default: null },
+    lastBroadcast: { type: notifyBroadcastSchema, default: null },
   },
   { _id: false },
 );

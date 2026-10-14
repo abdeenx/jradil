@@ -151,6 +151,14 @@ identifies a person.
   body, with a preview. Blank text means the built-in wording. Changes apply within
   a minute, no redeploy.
 - **الحالة** — subscriber count, where today stands, and the last send's numbers.
+- **إرسال تنبيه الآن** — a message of the operator's own, to every subscriber,
+  immediately: news, a new batch of words, an apology for downtime. It asks for
+  confirmation with the number of people it will reach, can be tried on the
+  operator's own browser first, and the last one sent is shown with its numbers.
+  It is separate from the daily notification — it does not count as that day's
+  send, and it goes out even while the daily one is switched off. The server
+  refuses a second send for a minute after one, so a double click or a second
+  tab cannot send it twice. It expires after 12 hours if a device is offline.
 - **تجربة على هذا الجهاز** — subscribe the operator's own browser and send it a test
   with the wording currently in the form, saved or not. Nobody else receives it.
 

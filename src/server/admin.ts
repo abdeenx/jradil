@@ -30,9 +30,13 @@ import {
   type NotificationSettings,
 } from "#/lib/notifications.ts";
 import {
+  broadcastNotification,
   countSubscriptions,
+  lastBroadcast,
   lastDailyRun,
   sendTestNotification,
+  type BroadcastResult,
+  type LastBroadcast,
   type LastRun,
   type TestSendResult,
 } from "#/lib/push.ts";
@@ -395,17 +399,25 @@ export type NotificationsPayload = {
   /** Browsers currently subscribed. */
   subscribers: number;
   lastRun: LastRun | null;
+  lastBroadcast: LastBroadcast | null;
 };
 
 export const adminGetNotifications = createServerFn({ method: "GET" }).handler(
   async (): Promise<NotificationsPayload> => {
     requireAdmin();
-    const [settings, subscribers, lastRun] = await Promise.all([
+    const [settings, subscribers, lastRun, broadcast] = await Promise.all([
       getSettings(),
       countSubscriptions(),
       lastDailyRun(),
+      lastBroadcast(),
     ]);
-    return { today: sudanDateKey(), settings: settings.notifications, subscribers, lastRun };
+    return {
+      today: sudanDateKey(),
+      settings: settings.notifications,
+      subscribers,
+      lastRun,
+      lastBroadcast: broadcast,
+    };
   },
 );
 
@@ -450,4 +462,17 @@ export const adminSendTestNotification = createServerFn({ method: "POST" })
       title: data.title?.trim() || null,
       body: data.body?.trim() || null,
     });
+  });
+
+/** Sends the operator's own message to every subscriber, right now. */
+export const adminBroadcastNotification = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      title: z.string().trim().min(1).max(NOTIFY_TITLE_MAX),
+      body: z.string().trim().min(1).max(NOTIFY_BODY_MAX),
+    }),
+  )
+  .handler(async ({ data }): Promise<BroadcastResult> => {
+    requireAdmin();
+    return broadcastNotification(data);
   });

@@ -15,6 +15,7 @@ import {
 } from "#/lib/notifications.ts";
 import { formatSudan } from "#/lib/sudan-time.ts";
 import {
+  adminBroadcastNotification,
   adminGetNotifications,
   adminSendTestNotification,
   adminUpdateNotifications,
@@ -196,6 +197,9 @@ function NotificationsPage() {
       {/* -------------------------------------------------------- status -- */}
       <Status />
 
+      {/* ------------------------------------------------------ send now -- */}
+      <SendNow push={push} />
+
       {/* ---------------------------------------------------------- test -- */}
       <TestOnThisDevice push={push} title={draft.title} body={draft.body} />
     </div>
@@ -203,17 +207,26 @@ function NotificationsPage() {
 }
 
 /** Roughly how a phone shows it, so the operator can judge the length. */
-function Preview({ title, body }: { title: string; body: string }) {
+function Preview({
+  title,
+  body,
+  fallbackTitle = DEFAULT_NOTIFY_TITLE,
+  fallbackBody = DEFAULT_NOTIFY_BODY,
+}: {
+  title: string;
+  body: string;
+  /** Shown while a field is blank. */
+  fallbackTitle?: string;
+  fallbackBody?: string;
+}) {
   return (
     <div>
       <p className="text-base-content/60 mb-1 text-xs">معاينة</p>
       <div className="bg-base-200 rounded-box flex max-w-sm items-start gap-3 p-3 shadow-sm">
         <img src="/icon-192.png" alt="" className="size-10 shrink-0 rounded-lg" />
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold">{title.trim() || DEFAULT_NOTIFY_TITLE}</p>
-          <p className="text-base-content/70 line-clamp-2 text-sm">
-            {body.trim() || DEFAULT_NOTIFY_BODY}
-          </p>
+          <p className="truncate text-sm font-bold">{title.trim() || fallbackTitle}</p>
+          <p className="text-base-content/70 line-clamp-2 text-sm">{body.trim() || fallbackBody}</p>
         </div>
       </div>
     </div>
@@ -259,6 +272,193 @@ function Status() {
         ) : (
           <p className="text-base-content/60 text-sm">لم يُرسل أي تنبيه يومي بعد.</p>
         )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * A message of the operator's choosing, to every subscriber, now — for news
+ * that does not fit the daily notification.
+ *
+ * Two steps on purpose: it reaches everyone and cannot be recalled, so the
+ * button first asks, in place, with the number of people it will reach. The
+ * server refuses a second send for a minute after one, so a double click or a
+ * second tab cannot send it twice either.
+ */
+function SendNow({ push }: { push: PushSubscriptionControl }) {
+  const { subscribers, lastBroadcast } = Route.useLoaderData();
+  const router = useRouter();
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState<"send" | "test" | null>(null);
+  const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+
+  const ready = title.trim() !== "" && body.trim() !== "";
+  const canTest = push.state === "on" && push.endpoint !== null;
+
+  function edit(update: () => void) {
+    update();
+    setConfirming(false);
+    setNotice(null);
+  }
+
+  async function send() {
+    setBusy("send");
+    setNotice(null);
+    try {
+      const result = await adminBroadcastNotification({ data: { title, body } });
+      if (result.ok) {
+        setTitle("");
+        setBody("");
+        setNotice({
+          tone: "success",
+          text: `أُرسل. وصل إلى ${result.delivered} · تعذّر ${result.failed} · حُذف ${result.removed} اشتراكًا منتهيًا.`,
+        });
+        await router.invalidate();
+      } else if (result.reason === "busy") {
+        setNotice({
+          tone: "error",
+          text: `أُرسل تنبيه قبل قليل. انتظر ${result.retryInSeconds} ثانية ثم حاول مجددًا.`,
+        });
+      } else {
+        setNotice({ tone: "error", text: "لا يوجد مشتركون بعد." });
+      }
+    } catch {
+      setNotice({ tone: "error", text: "تعذّر الإرسال. تحقق من الاتصال بقاعدة البيانات." });
+    } finally {
+      setBusy(null);
+      setConfirming(false);
+    }
+  }
+
+  async function test() {
+    if (!push.endpoint) return;
+    setBusy("test");
+    setNotice(null);
+    try {
+      const outcome = await adminSendTestNotification({
+        data: { endpoint: push.endpoint, title: title.trim(), body: body.trim() },
+      });
+      setNotice(
+        outcome.ok
+          ? { tone: "success", text: "أُرسلت التجربة إلى هذا الجهاز وحده." }
+          : { tone: "error", text: TEST_FAILURE[outcome.reason] },
+      );
+    } catch {
+      setNotice({ tone: "error", text: "تعذّر الإرسال." });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="card bg-base-100 border-base-300 border">
+      <div className="card-body gap-4">
+        <div>
+          <h2 className="card-title text-base">إرسال تنبيه الآن</h2>
+          <p className="text-base-content/60 mt-1 text-sm">
+            رسالة تكتبها أنت، تصل فورًا إلى كل المشتركين. مستقلة عن التنبيه اليومي: لا تُحسب مكانه،
+            وتُرسل ولو كان متوقفًا.
+          </p>
+        </div>
+
+        <fieldset className="fieldset" disabled={busy !== null}>
+          <legend className="fieldset-legend">العنوان</legend>
+          <input
+            type="text"
+            className="input w-full"
+            maxLength={NOTIFY_TITLE_MAX}
+            value={title}
+            onChange={(event) => edit(() => setTitle(event.target.value))}
+          />
+          <legend className="fieldset-legend">النص</legend>
+          <textarea
+            className="textarea w-full"
+            rows={2}
+            maxLength={NOTIFY_BODY_MAX}
+            value={body}
+            onChange={(event) => edit(() => setBody(event.target.value))}
+          />
+        </fieldset>
+
+        <Preview title={title} body={body} fallbackTitle="العنوان" fallbackBody="النص" />
+
+        {notice ? (
+          <div
+            role="alert"
+            className={`alert alert-soft py-2 text-sm ${notice.tone === "error" ? "alert-error" : "alert-success"}`}
+          >
+            <span>{notice.text}</span>
+          </div>
+        ) : null}
+
+        {confirming ? (
+          <div role="alert" className="alert alert-warning alert-soft flex-wrap text-sm">
+            <span className="flex-1">
+              سيصل هذا التنبيه فورًا إلى {subscribers.toLocaleString("en-US")} مشترك، ولا يمكن سحبه
+              بعد الإرسال.
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn btn-warning btn-sm"
+                disabled={busy !== null}
+                onClick={() => void send()}
+              >
+                {busy === "send" ? <span className="loading loading-spinner loading-xs" /> : null}
+                تأكيد الإرسال
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                disabled={busy !== null}
+                onClick={() => setConfirming(false)}
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="card-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!ready || subscribers === 0 || busy !== null}
+              onClick={() => {
+                setNotice(null);
+                setConfirming(true);
+              }}
+            >
+              إرسال إلى كل المشتركين ({subscribers.toLocaleString("en-US")})
+            </button>
+            {canTest ? (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={!ready || busy !== null}
+                onClick={() => void test()}
+              >
+                {busy === "test" ? <span className="loading loading-spinner loading-xs" /> : null}
+                جرّب على هذا الجهاز أولًا
+              </button>
+            ) : null}
+          </div>
+        )}
+
+        {subscribers === 0 ? (
+          <p className="text-base-content/60 text-sm">لا يوجد مشتركون بعد.</p>
+        ) : null}
+
+        {lastBroadcast ? (
+          <p className="text-base-content/70 text-sm">
+            آخر رسالة: <span className="font-bold">«{lastBroadcast.title}»</span> ·{" "}
+            {formatSudan(new Date(lastBroadcast.at), { dateStyle: "medium", timeStyle: "short" })} ·
+            وصل إلى {lastBroadcast.delivered} · تعذّر {lastBroadcast.failed} · حُذف{" "}
+            {lastBroadcast.removed}
+          </p>
+        ) : null}
       </div>
     </section>
   );

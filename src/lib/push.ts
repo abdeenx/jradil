@@ -148,7 +148,11 @@ export async function countSubscriptions(): Promise<number> {
 
 // -------------------------------------------------------------- delivery --
 
-export type SendOptions = { TTL: number; topic: string; urgency: "normal" };
+/**
+ * `topic` collapses a notification still waiting at the push service into the
+ * next one with the same topic; left out when every message should arrive.
+ */
+export type SendOptions = { TTL: number; topic?: string; urgency: "normal" };
 
 /**
  * Sends one push. Throws on refusal, with the push service's `statusCode` when
@@ -323,6 +327,110 @@ export async function lastDailyRun(): Promise<LastRun | null> {
     delivered: run.delivered,
     failed: run.failed,
     removed: run.removed,
+  };
+}
+
+// -------------------------------------------------------- manual send --
+
+/** How long after a manual send another one is refused. */
+const BROADCAST_COOLDOWN_MS = 60_000;
+
+/** Upper bound on one send, so a crashed one cannot hold the lock for ever. */
+const BROADCAST_MAX_MS = 10 * 60_000;
+
+/** A manual message may be about anything, so it waits at most half a day. */
+const BROADCAST_TTL_SECONDS = 12 * 60 * 60;
+
+export type BroadcastResult =
+  | ({ ok: true } & DeliveryReport)
+  | { ok: false; reason: "no-subscribers" }
+  | { ok: false; reason: "busy"; retryInSeconds: number };
+
+/**
+ * Sends the operator's own message to every subscriber, now.
+ *
+ * Independent of the daily notification: it neither counts as nor blocks that
+ * day's send, and it goes out even while the daily one is switched off — it is
+ * an explicit instruction. Each one carries its own tag, so it never replaces
+ * a notification already on someone's screen.
+ */
+export async function broadcastNotification(
+  text: { title: string; body: string },
+  now: Date = new Date(),
+  send: PushSender = webPushSender,
+): Promise<BroadcastResult> {
+  await getSettings();
+  if ((await countSubscriptions()) === 0) return { ok: false, reason: "no-subscribers" };
+
+  // `null` also matches a settings document that has never had the field.
+  const claimed = await Settings.findOneAndUpdate(
+    {
+      key: SETTINGS_KEY,
+      $or: [
+        { "notifications.broadcastLockedUntil": null },
+        { "notifications.broadcastLockedUntil": { $lte: now } },
+      ],
+    },
+    { $set: { "notifications.broadcastLockedUntil": new Date(now.getTime() + BROADCAST_MAX_MS) } },
+    { projection: { _id: 1 }, lean: true },
+  );
+  if (!claimed) {
+    const held = await Settings.findOne(
+      { key: SETTINGS_KEY },
+      { "notifications.broadcastLockedUntil": 1 },
+    ).lean<{ notifications?: { broadcastLockedUntil?: Date | null } }>();
+    const until = held?.notifications?.broadcastLockedUntil?.getTime() ?? now.getTime();
+    return {
+      ok: false,
+      reason: "busy",
+      retryInSeconds: Math.max(1, Math.ceil((until - now.getTime()) / 1000)),
+    };
+  }
+
+  const targets = await Subscription.find({}, { endpoint: 1, keys: 1, failures: 1 }).lean<
+    (PushTarget & { failures: number })[]
+  >();
+  const report = await deliver(
+    targets,
+    { title: text.title, body: text.body, url: "/", tag: `jradil-broadcast-${now.getTime()}` },
+    { TTL: BROADCAST_TTL_SECONDS, urgency: "normal" },
+    send,
+  );
+
+  await Settings.updateOne(
+    { key: SETTINGS_KEY },
+    {
+      $set: {
+        "notifications.broadcastLockedUntil": new Date(Date.now() + BROADCAST_COOLDOWN_MS),
+        "notifications.lastBroadcast": { at: now, ...text, ...report },
+      },
+    },
+  );
+  return { ok: true, ...report };
+}
+
+export type LastBroadcast = { at: string; title: string; body: string } & DeliveryReport;
+
+/** The last manual send, for the dashboard. */
+export async function lastBroadcast(): Promise<LastBroadcast | null> {
+  await ensureSchema();
+  const settings = await Settings.findOne(
+    { key: SETTINGS_KEY },
+    { "notifications.lastBroadcast": 1 },
+  ).lean<{
+    notifications?: {
+      lastBroadcast?: ({ at: Date; title: string; body: string } & DeliveryReport) | null;
+    };
+  }>();
+  const sent = settings?.notifications?.lastBroadcast;
+  if (!sent) return null;
+  return {
+    at: sent.at.toISOString(),
+    title: sent.title,
+    body: sent.body,
+    delivered: sent.delivered,
+    failed: sent.failed,
+    removed: sent.removed,
   };
 }
 
