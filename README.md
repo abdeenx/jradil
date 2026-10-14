@@ -35,15 +35,16 @@ Two deliberate edge cases:
 
 ## Data model
 
-Everything lives in **one MongoDB collection, `jradil`**. Three record shapes
+Everything lives in **one MongoDB collection, `jradil`**. Several record shapes
 share it, told apart by a `kind` field (Mongoose discriminators, with the
 discriminator key renamed from `__t` to `kind`):
 
-| `kind`     | What it is                         | Key fields                                                                                                                            |
-| ---------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `word`     | One valid five-letter word         | `text`, `normalized`, `dialect`, `pool`, `link`, `notes`, `assignedDateKey`, `firstServedDateKey`, `lastServedDateKey`, `timesServed` |
-| `day`      | The puzzle served on one Sudan day | `dateKey`, `wordId`, `wordText`, `source` (`admin` \| `auto`), `revisions[]`                                                          |
-| `settings` | The operator settings singleton    | `key`, `poolSize`, `enforceDictionary`                                                                                                |
+| `kind`         | What it is                                        | Key fields                                                                                                                            |
+| -------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `word`         | One valid five-letter word                        | `text`, `normalized`, `dialect`, `pool`, `link`, `notes`, `assignedDateKey`, `firstServedDateKey`, `lastServedDateKey`, `timesServed` |
+| `day`          | The puzzle served on one Sudan day                | `dateKey`, `wordId`, `wordText`, `source` (`admin` \| `auto`), `revisions[]`                                                          |
+| `settings`     | The operator settings singleton                   | `key`, `poolSize`, `enforceDictionary`, `notifications`, `vapidPublicKey`, `vapidPrivateKey`                                          |
+| `subscription` | One browser that asked for the daily notification | `endpoint`, `keys`, `failures`                                                                                                        |
 
 Uniqueness is scoped per shape with partial indexes:
 
@@ -51,6 +52,7 @@ Uniqueness is scoped per shape with partial indexes:
 - `day_datekey_unique` — one puzzle per day, ever
 - `settings_key_unique` — one settings document
 - `unknown_normalized_unique` — one queue row per folded spelling
+- `subscription_endpoint_unique` — one row per browser subscription
 
 The two word flags mean different things and are worth keeping apart:
 
@@ -70,12 +72,13 @@ vp dev
 
 ### Environment
 
-| Variable               | Required     | Purpose                                                                                                         |
-| ---------------------- | ------------ | --------------------------------------------------------------------------------------------------------------- |
-| `MONGODB_URI`          | yes          | Connection string. Add a database name to it — a URI without one makes MongoDB use its default `test` database. |
-| `MONGODB_DB`           | no           | Pins the database name, overriding the URI.                                                                     |
-| `ADMIN_PASSWORD`       | for `/admin` | The operator's password. Without it the dashboard refuses to open rather than falling back to a default.        |
-| `ADMIN_SESSION_SECRET` | no           | Signing key for the session cookie. Defaults to `ADMIN_PASSWORD`.                                               |
+| Variable               | Required     | Purpose                                                                                                                 |
+| ---------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `MONGODB_URI`          | yes          | Connection string. Add a database name to it — a URI without one makes MongoDB use its default `test` database.         |
+| `MONGODB_DB`           | no           | Pins the database name, overriding the URI.                                                                             |
+| `ADMIN_PASSWORD`       | for `/admin` | The operator's password. Without it the dashboard refuses to open rather than falling back to a default.                |
+| `ADMIN_SESSION_SECRET` | no           | Signing key for the session cookie. Defaults to `ADMIN_PASSWORD`.                                                       |
+| `VAPID_SUBJECT`        | no           | Contact the push services see. Defaults to `APP_URL` when it is `https`; see [Daily notification](#daily-notification). |
 
 Nothing else. The database needs no manual setup: the collection and its indexes
 are created on first use, so the whole product can be operated without opening
@@ -113,6 +116,74 @@ The dictionary, which is loaded in bulk and then left alone.
 - Per-row **بيانات** opens the metadata editor: the learn-more link the player
   will see, and a private note.
 - The dictionary-validation switch, next to the count of words it applies to.
+
+## Daily notification
+
+Players can ask for one push notification a day, telling them the new word is
+ready. It needs no account and no configuration: the signing keys are generated
+on first use and kept in the settings document, the same way the progress secret
+is.
+
+### What players see
+
+**The offer** sits in the result panel, which opens by itself when a game ends —
+the moment it means something, since the word on offer is tomorrow's. It never
+interrupts a game in progress and never opens a second dialog. **The footer**
+carries a one-line switch, so turning the offer down is never a dead end, and it
+is where the notification is turned off again.
+
+| State                    | What the player sees                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------ |
+| Can ask, not yet asked   | **ذكّرني بكلمة الغد** in the result panel, and a footer link                                |
+| Subscribed               | A confirmation line, and **إيقاف** in the footer                                           |
+| Turned the offer down    | No offer in the panel for 30 days; the footer link stays                                   |
+| Refused at the browser   | A footer note that it is blocked in the browser settings                                   |
+| iOS, not installed       | A note to add the site to the home screen first — iOS only delivers push to installed apps |
+| Switched off by operator | Nothing, except **إيقاف** for anyone already subscribed                                    |
+
+The service worker (`public/sw.js`) is only registered when a player subscribes.
+A subscription is an endpoint at a push service and two keys — nothing that
+identifies a person.
+
+### The dashboard: `/admin/notifications`
+
+- **التنبيه اليومي** — the on/off switch, the send time (Khartoum), and the title and
+  body, with a preview. Blank text means the built-in wording. Changes apply within
+  a minute, no redeploy.
+- **الحالة** — subscriber count, where today stands, and the last send's numbers.
+- **تجربة على هذا الجهاز** — subscribe the operator's own browser and send it a test
+  with the wording currently in the form, saved or not. Nobody else receives it.
+
+### How it fires
+
+A timer inside the server (`src/server/plugins/notifications.ts`) asks once a
+minute whether the notification is due, so it works in the Docker image with no
+external cron.
+
+- **It catches up.** The check is "is it within three hours after the send time,
+  and has today not gone out" — so a restart or a paused container still sends,
+  but nobody gets "today's word is ready" at midnight.
+- **It cannot double-send.** The day is claimed with one conditional write before
+  anything is sent, so two ticks or two containers cannot both send. A crash
+  mid-send loses that day's notification rather than repeating it.
+- **It does not announce an empty board.** If today has no word, nothing is sent
+  and nothing is claimed, so a word set later in the window still goes out.
+- **It prunes itself.** An endpoint the push service reports gone (404, 410) is
+  deleted at once; one that keeps failing is dropped after five sends in a row.
+
+Only endpoints at real push services (Google, Mozilla, Apple, Microsoft) are
+accepted, because the server sends a request to whatever a subscription names.
+
+### Keys
+
+The VAPID key pair lives in the settings document. **Deleting it, or moving to a
+fresh database, orphans every subscription**; browsers notice on their weekly
+check and resubscribe silently, but miss notifications until then.
+
+Push services want a contact for the sender. The app uses `APP_URL` when it is
+`https`, which is the production case; set `VAPID_SUBJECT` (an `https:` URL or a
+`mailto:` address) to use something else. Apple rejects anything that is not one
+of the two.
 
 ## Words the dictionary refuses
 
@@ -202,7 +273,7 @@ reaches today's players.
 
 ## Scheduled resolution
 
-None is needed. `resolveDay` runs lazily, so the first request after midnight
+No scheduler is needed for the word. `resolveDay` runs lazily, so the first request after midnight
 fixes the day's word, and the unique day index keeps it stable for everyone
 after. The dashboard resolves today on load, so a day is materialised the first
 time the operator looks at it.

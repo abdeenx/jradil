@@ -6,9 +6,11 @@ import { Confetti } from "#/components/Confetti.tsx";
 import { Countdown } from "#/components/Countdown.tsx";
 import { GameBoard } from "#/components/GameBoard.tsx";
 import { Keyboard } from "#/components/Keyboard.tsx";
+import { NotificationOffer, NotificationToggle } from "#/components/NotificationPrompt.tsx";
 import { ResultDialog } from "#/components/ResultDialog.tsx";
 import { SiteHeader } from "#/components/SiteHeader.tsx";
 import { useDailyGame } from "#/hooks/useDailyGame.ts";
+import { usePushSubscription } from "#/hooks/usePushSubscription.ts";
 import { isBaseLetter, toLetters } from "#/lib/arabic.ts";
 import { APP_NAME_AR, NEXT_WORD_LABEL, TAGLINE_AR } from "#/lib/config.ts";
 import { socialMeta } from "#/lib/social.ts";
@@ -33,6 +35,8 @@ function GamePage() {
   const puzzle = Route.useLoaderData();
   const router = useRouter();
   const game = useDailyGame(puzzle);
+  // One subscription state for the offer and the footer toggle.
+  const push = usePushSubscription();
 
   const handleElapsed = useCallback(() => {
     void router.invalidate();
@@ -139,8 +143,9 @@ function GamePage() {
           </div>
         )}
 
-        <footer className="text-base-content/40 mt-8 text-center text-xs">
-          {APP_NAME_AR} — كلمة سودانية جديدة كل يوم، بتوقيت الخرطوم (UTC+2).
+        <footer className="text-base-content/40 mt-8 space-y-2 text-center text-xs">
+          <NotificationToggle push={push} enabled={puzzle.notifications} />
+          <p>{APP_NAME_AR} — كلمة سودانية جديدة كل يوم، بتوقيت الخرطوم (UTC+2).</p>
         </footer>
       </main>
 
@@ -154,7 +159,9 @@ function GamePage() {
         link={game.link}
         rows={game.rows}
         onClose={game.closeResult}
-      />
+      >
+        <NotificationOffer push={push} enabled={puzzle.notifications} />
+      </ResultDialog>
 
       {/* After the dialog on purpose: its effect opens second, so it stacks on top. */}
       <Confetti burst={game.celebration} />

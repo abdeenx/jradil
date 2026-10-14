@@ -23,6 +23,19 @@ import {
 } from "#/lib/admin-auth.ts";
 import { toLetters } from "#/lib/arabic.ts";
 import { WORD_LETTER_COUNT } from "#/lib/config.ts";
+import {
+  NOTIFY_BODY_MAX,
+  NOTIFY_TITLE_MAX,
+  parseNotifyTime,
+  type NotificationSettings,
+} from "#/lib/notifications.ts";
+import {
+  countSubscriptions,
+  lastDailyRun,
+  sendTestNotification,
+  type LastRun,
+  type TestSendResult,
+} from "#/lib/push.ts";
 import { addDays, isDateKey, sudanDateKey, type DateKey } from "#/lib/sudan-time.ts";
 import {
   addUnknownWords,
@@ -372,4 +385,69 @@ export const adminUpdateSettings = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<SettingsView> => {
     requireAdmin();
     return updateSettings(data);
+  });
+
+// -------------------------------------------------------- notifications --
+
+export type NotificationsPayload = {
+  today: DateKey;
+  settings: NotificationSettings;
+  /** Browsers currently subscribed. */
+  subscribers: number;
+  lastRun: LastRun | null;
+};
+
+export const adminGetNotifications = createServerFn({ method: "GET" }).handler(
+  async (): Promise<NotificationsPayload> => {
+    requireAdmin();
+    const [settings, subscribers, lastRun] = await Promise.all([
+      getSettings(),
+      countSubscriptions(),
+      lastDailyRun(),
+    ]);
+    return { today: sudanDateKey(), settings: settings.notifications, subscribers, lastRun };
+  },
+);
+
+/** Operator copy; an empty string means "back to the default wording". */
+const notifyText = (max: number) => z.string().max(max).nullable();
+
+export const adminUpdateNotifications = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      enabled: z.boolean().optional(),
+      /** `HH:MM`, Sudan time — what a time input produces. */
+      time: z.string().max(5).optional(),
+      title: notifyText(NOTIFY_TITLE_MAX).optional(),
+      body: notifyText(NOTIFY_BODY_MAX).optional(),
+    }),
+  )
+  .handler(
+    async ({ data }): Promise<{ ok: true; settings: NotificationSettings } | { ok: false }> => {
+      requireAdmin();
+      const time = data.time === undefined ? undefined : parseNotifyTime(data.time);
+      if (time === null) return { ok: false };
+
+      const settings = await updateSettings({
+        notifications: { enabled: data.enabled, time, title: data.title, body: data.body },
+      });
+      return { ok: true, settings: settings.notifications };
+    },
+  );
+
+/** Sends the given wording to the operator's own browser only. */
+export const adminSendTestNotification = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      endpoint: z.string().min(1).max(2000),
+      title: notifyText(NOTIFY_TITLE_MAX),
+      body: notifyText(NOTIFY_BODY_MAX),
+    }),
+  )
+  .handler(async ({ data }): Promise<TestSendResult> => {
+    requireAdmin();
+    return sendTestNotification(data.endpoint, {
+      title: data.title?.trim() || null,
+      body: data.body?.trim() || null,
+    });
   });

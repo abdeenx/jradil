@@ -49,6 +49,13 @@ function AdminLayout() {
             <Link to="/admin/words" className="tab" activeProps={{ className: "tab tab-active" }}>
               الكلمات
             </Link>
+            <Link
+              to="/admin/notifications"
+              className="tab"
+              activeProps={{ className: "tab tab-active" }}
+            >
+              التنبيهات
+            </Link>
           </div>
 
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => void logout()}>

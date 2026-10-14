@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { APP_NAME_AR, MAX_ATTEMPTS } from "#/lib/config.ts";
 import type { GameRow, GameStatus } from "#/lib/game.ts";
@@ -23,6 +23,7 @@ export function ResultDialog({
   link,
   rows,
   onClose,
+  children,
 }: {
   open: boolean;
   dateKey: DateKey;
@@ -35,15 +36,23 @@ export function ResultDialog({
   link: string | null;
   rows: readonly GameRow[];
   onClose: () => void;
+  /** Shown under the answer: what to do next, such as the notification offer. */
+  children?: ReactNode;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const shareRef = useRef<HTMLButtonElement>(null);
   const [copied, setCopied] = useState(false);
   const maxAttempts = MAX_ATTEMPTS;
 
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      dialog.showModal();
+      // The browser focuses the first control, which would otherwise be whatever
+      // `children` put first — an Enter meant for sharing must not subscribe.
+      shareRef.current?.focus();
+    }
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
@@ -102,8 +111,15 @@ export function ResultDialog({
           ) : null}
         </div>
 
+        {children}
+
         <div className="modal-action">
-          <button type="button" className="btn btn-primary flex-1" onClick={() => void share()}>
+          <button
+            ref={shareRef}
+            type="button"
+            className="btn btn-primary flex-1"
+            onClick={() => void share()}
+          >
             {copied ? "تم النسخ ✓" : "شارك نتيجتك"}
           </button>
           <form method="dialog" className="flex-1">

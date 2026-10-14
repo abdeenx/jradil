@@ -46,6 +46,8 @@ export type PuzzlePayload = {
    */
   appUrl: string | null;
   state: PuzzleState;
+  /** The operator has the daily push notification switched on, so it may be offered. */
+  notifications: boolean;
 };
 
 export type GuessPayload =
@@ -67,7 +69,12 @@ export type GuessPayload =
     }
   | { ok: false; reason: string; message: string };
 
-function puzzlePayload(dateKey: DateKey, state: PuzzleState, now: Date): PuzzlePayload {
+function puzzlePayload(
+  dateKey: DateKey,
+  state: PuzzleState,
+  now: Date,
+  notifications: boolean,
+): PuzzlePayload {
   return {
     dateKey,
     todayKey: sudanDateKey(now),
@@ -78,6 +85,7 @@ function puzzlePayload(dateKey: DateKey, state: PuzzleState, now: Date): PuzzleP
     msRemaining: Math.max(0, dayEndUtc(dateKey).getTime() - now.getTime()),
     appUrl: optionalEnv("APP_URL"),
     state,
+    notifications,
   };
 }
 
@@ -86,13 +94,14 @@ export const getPuzzle = createServerFn({ method: "GET" }).handler(
   async (): Promise<PuzzlePayload> => {
     const now = new Date();
     const today = sudanDateKey(now);
-    const resolution = await resolveDay(today);
+    const [resolution, settings] = await Promise.all([resolveDay(today), getSettings()]);
+    const notifications = settings.notifications.enabled;
 
     if (resolution.status === "ready") {
-      return puzzlePayload(resolution.day.dateKey, "ready", now);
+      return puzzlePayload(resolution.day.dateKey, "ready", now, notifications);
     }
     // Today, with nothing left to draw from: the pool has run dry.
-    return puzzlePayload(today, "no-words", now);
+    return puzzlePayload(today, "no-words", now, notifications);
   },
 );
 

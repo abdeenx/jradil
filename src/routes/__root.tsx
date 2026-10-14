@@ -22,6 +22,9 @@ export const Route = createRootRoute({
       { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },
+      // Makes the site installable, which is also what lets iOS deliver push:
+      // Safari only allows it for a site added to the home screen.
+      { rel: "manifest", href: "/manifest.webmanifest" },
     ],
   }),
   shellComponent: RootDocument,

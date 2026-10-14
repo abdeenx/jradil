@@ -13,6 +13,8 @@
  * - `kind: "day"`      — the puzzle actually served on one Sudan calendar day,
  *                        plus a revision log of every change the operator made.
  * - `kind: "settings"` — the singleton operator settings document.
+ * - `kind: "unknown"`  — a word players tried that the dictionary lacks.
+ * - `kind: "subscription"` — one browser that asked for the daily notification.
  *
  * Unique indexes are scoped to their kind with `partialFilterExpression`, so
  * "unique per collection" becomes "unique per record shape".
@@ -21,6 +23,7 @@
 import mongoose, { Schema } from "mongoose";
 
 import { COLLECTION_NAME, DEFAULT_POOL_SIZE, WORD_LETTER_COUNT } from "./config.ts";
+import { DEFAULT_NOTIFY_TIME } from "./notifications.ts";
 
 /** Discriminator key. Named `kind` so raw documents read clearly in Atlas. */
 export const DOC_KIND_KEY = "kind";
@@ -103,6 +106,40 @@ daySchema.index(
   { name: "day_datekey_unique", unique: true, partialFilterExpression: { kind: "day" } },
 );
 
+/** The last daily send, for the dashboard. */
+const notifyRunSchema = new Schema(
+  {
+    dateKey: { type: String, required: true },
+    at: { type: Date, required: true },
+    /** Subscriptions the push services accepted the notification for. */
+    delivered: { type: Number, required: true },
+    /** Refused this time; kept, and dropped after several refusals in a row. */
+    failed: { type: Number, required: true },
+    /** Gone for good, and deleted. */
+    removed: { type: Number, required: true },
+  },
+  { _id: false },
+);
+
+const notificationsSchema = new Schema(
+  {
+    enabled: { type: Boolean, required: true, default: true },
+    /** Sudan-local send time. */
+    hour: { type: Number, required: true, default: DEFAULT_NOTIFY_TIME.hour, min: 0, max: 23 },
+    minute: { type: Number, required: true, default: DEFAULT_NOTIFY_TIME.minute, min: 0, max: 59 },
+    /** Operator wording; null means the built-in text. */
+    title: { type: String, default: null },
+    body: { type: String, default: null },
+    /**
+     * The day the notification was last claimed for. Written before sending, by
+     * a conditional update, so two ticks or two containers cannot both send.
+     */
+    lastSentDateKey: { type: String, default: null },
+    lastRun: { type: notifyRunSchema, default: null },
+  },
+  { _id: false },
+);
+
 const settingsSchema = new Schema({
   key: { type: String, required: true },
   /** How many candidates the operator wants in the auto-pick pool. */
@@ -114,6 +151,14 @@ const settingsSchema = new Schema({
    * use and never sent to a client.
    */
   secret: { type: String, default: null },
+  notifications: { type: notificationsSchema, default: () => ({}) },
+  /**
+   * The VAPID key pair that signs push requests. Generated on first use, like
+   * `secret`; the public half is handed to browsers, the private half never
+   * leaves the server. Replacing it orphans every existing subscription.
+   */
+  vapidPublicKey: { type: String, default: null },
+  vapidPrivateKey: { type: String, default: null },
 });
 
 settingsSchema.index(
@@ -147,12 +192,38 @@ unknownSchema.index(
 // The queue is shown most-tried first, and cleared wholesale when reviewed.
 unknownSchema.index({ count: -1 }, { name: "unknown_count" });
 
+/**
+ * A browser that asked for the daily notification.
+ *
+ * Nothing here identifies a person: an endpoint at a push service and the two
+ * keys that encrypt messages for it. No account, no address, no IP.
+ */
+const subscriptionSchema = new Schema({
+  endpoint: { type: String, required: true },
+  keys: {
+    p256dh: { type: String, required: true },
+    auth: { type: String, required: true },
+  },
+  /** Consecutive refused deliveries; reset by a success or a resubscribe. */
+  failures: { type: Number, required: true, default: 0 },
+});
+
+subscriptionSchema.index(
+  { endpoint: 1 },
+  {
+    name: "subscription_endpoint_unique",
+    unique: true,
+    partialFilterExpression: { kind: "subscription" },
+  },
+);
+
 // ------------------------------------------------------------- domain types --
 
 export type WordRecord = mongoose.InferSchemaType<typeof wordSchema> & Timestamps;
 export type DayRecord = mongoose.InferSchemaType<typeof daySchema> & Timestamps;
 export type SettingsRecord = mongoose.InferSchemaType<typeof settingsSchema> & Timestamps;
 export type UnknownRecord = mongoose.InferSchemaType<typeof unknownSchema> & Timestamps;
+export type SubscriptionRecord = mongoose.InferSchemaType<typeof subscriptionSchema> & Timestamps;
 export type DayRevision = mongoose.InferSchemaType<typeof revisionSchema>;
 
 export type WordDocument = mongoose.HydratedDocument<WordRecord>;
@@ -166,6 +237,7 @@ export type Models = {
   Day: mongoose.Model<DayRecord, Record<string, never>, Record<string, never>>;
   Settings: mongoose.Model<SettingsRecord, Record<string, never>, Record<string, never>>;
   Unknown: mongoose.Model<UnknownRecord, Record<string, never>, Record<string, never>>;
+  Subscription: mongoose.Model<SubscriptionRecord, Record<string, never>, Record<string, never>>;
 };
 
 // ---------------------------------------------------------------- models --
@@ -200,7 +272,11 @@ function buildModels(): Models {
     registered.Unknown ??
     (Base.discriminator("unknown", unknownSchema) as unknown as Models["Unknown"]);
 
-  return { Base, Word, Day, Settings, Unknown };
+  const Subscription =
+    registered.Subscription ??
+    (Base.discriminator("subscription", subscriptionSchema) as unknown as Models["Subscription"]);
+
+  return { Base, Word, Day, Settings, Unknown, Subscription };
 }
 
 const globalForModels = globalThis as unknown as { __jradilModels?: Models };
@@ -213,5 +289,6 @@ export const Word = models.Word;
 export const Day = models.Day;
 export const Settings = models.Settings;
 export const Unknown = models.Unknown;
+export const Subscription = models.Subscription;
 
 export { WORD_LETTER_COUNT };

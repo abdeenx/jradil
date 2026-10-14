@@ -19,8 +19,15 @@ import { randomBytes } from "node:crypto";
 import type mongoose from "mongoose";
 
 import { isPlayableWord, normalizeArabic, toLetters } from "./arabic.ts";
-import { WORD_LETTER_COUNT } from "./config.ts";
+import { DEFAULT_POOL_SIZE, WORD_LETTER_COUNT } from "./config.ts";
 import { ensureSchema } from "./db.ts";
+import {
+  NOTIFY_BODY_MAX,
+  NOTIFY_TITLE_MAX,
+  cleanNotifyText,
+  normalizeNotifyTime,
+  type NotificationSettings,
+} from "./notifications.ts";
 import {
   Day,
   SETTINGS_KEY,
@@ -71,6 +78,15 @@ export type DayResolution =
 export type SettingsView = {
   poolSize: number;
   enforceDictionary: boolean;
+  /** The daily push notification, as the operator set it. */
+  notifications: NotificationSettings;
+};
+
+/** What an operator may change; the notification part is merged field by field. */
+export type SettingsPatch = {
+  poolSize?: number;
+  enforceDictionary?: boolean;
+  notifications?: Partial<NotificationSettings>;
 };
 
 export type PoolStatus = {
@@ -190,32 +206,80 @@ export async function getSettings(): Promise<SettingsView> {
   return value;
 }
 
+type SettingsLike = {
+  poolSize?: number;
+  enforceDictionary?: boolean;
+  notifications?: {
+    enabled?: boolean;
+    hour?: number;
+    minute?: number;
+    title?: string | null;
+    body?: string | null;
+  } | null;
+};
+
+/**
+ * Maps the stored document to a view. Every field falls back to its default,
+ * because a settings document written before a field existed simply lacks it,
+ * and lean reads do not apply schema defaults.
+ */
+function toSettingsView(doc: SettingsLike | null): SettingsView {
+  const notifications = doc?.notifications ?? {};
+  return {
+    poolSize: doc?.poolSize ?? DEFAULT_POOL_SIZE,
+    enforceDictionary: doc?.enforceDictionary ?? true,
+    notifications: {
+      enabled: notifications.enabled ?? true,
+      time: normalizeNotifyTime(notifications.hour, notifications.minute),
+      title: cleanNotifyText(notifications.title, NOTIFY_TITLE_MAX),
+      body: cleanNotifyText(notifications.body, NOTIFY_BODY_MAX),
+    },
+  };
+}
+
 async function readSettings(): Promise<SettingsView> {
   await ensureSchema();
 
   const existing = await Settings.findOne({ key: SETTINGS_KEY }).lean();
-  if (existing) {
-    return { poolSize: existing.poolSize, enforceDictionary: existing.enforceDictionary };
-  }
+  if (existing) return toSettingsView(existing);
 
   try {
-    const created = await Settings.create({ key: SETTINGS_KEY });
-    return { poolSize: created.poolSize, enforceDictionary: created.enforceDictionary };
+    return toSettingsView((await Settings.create({ key: SETTINGS_KEY })).toObject());
   } catch (error) {
     // A concurrent request created it first.
     if (!isDuplicateKeyError(error)) throw error;
-    const raced = await Settings.findOne({ key: SETTINGS_KEY }).lean();
-    return { poolSize: raced?.poolSize ?? 30, enforceDictionary: raced?.enforceDictionary ?? true };
+    return toSettingsView(await Settings.findOne({ key: SETTINGS_KEY }).lean());
   }
 }
 
-export async function updateSettings(patch: Partial<SettingsView>): Promise<SettingsView> {
+export async function updateSettings(patch: SettingsPatch): Promise<SettingsView> {
   await ensureSchema();
   const update: Record<string, unknown> = {};
   if (typeof patch.poolSize === "number") update.poolSize = Math.max(1, Math.floor(patch.poolSize));
   if (typeof patch.enforceDictionary === "boolean") {
     update.enforceDictionary = patch.enforceDictionary;
   }
+
+  // Dotted paths, so changing one notification field leaves the others — and
+  // the record of the last send — untouched.
+  const notifications = patch.notifications;
+  if (notifications) {
+    if (typeof notifications.enabled === "boolean") {
+      update["notifications.enabled"] = notifications.enabled;
+    }
+    if (notifications.time) {
+      const time = normalizeNotifyTime(notifications.time.hour, notifications.time.minute);
+      update["notifications.hour"] = time.hour;
+      update["notifications.minute"] = time.minute;
+    }
+    if (notifications.title !== undefined) {
+      update["notifications.title"] = cleanNotifyText(notifications.title, NOTIFY_TITLE_MAX);
+    }
+    if (notifications.body !== undefined) {
+      update["notifications.body"] = cleanNotifyText(notifications.body, NOTIFY_BODY_MAX);
+    }
+  }
+
   if (Object.keys(update).length > 0) {
     await Settings.updateOne({ key: SETTINGS_KEY }, { $set: update }, { upsert: true });
     settingsCache = null;

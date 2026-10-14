@@ -47,12 +47,16 @@ const config = defineConfig({
     devtools(),
     nitro({
       rollupConfig: { external: [/^@sentry\//] },
-      plugins: ["./src/server/plugins/warm-up.ts"],
+      plugins: ["./src/server/plugins/warm-up.ts", "./src/server/plugins/notifications.ts"],
       routeRules: {
         "/**": { headers: SECURITY_HEADERS },
         "/admin": { headers: NO_STORE },
         "/admin/**": { headers: NO_STORE },
         "/_serverFn/**": { headers: NO_STORE },
+        "/api/**": { headers: NO_STORE },
+        // A service worker is re-checked on every navigation anyway; this stops
+        // a CDN in front of the app holding an old one.
+        "/sw.js": { headers: { "cache-control": "no-cache" } },
       },
     }),
     tailwindcss(),

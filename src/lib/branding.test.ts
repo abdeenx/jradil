@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { APP_NAME_AR, WORDMARK_AR } from "./config.ts";
+import { APP_NAME_AR, TAGLINE_AR, WORDMARK_AR } from "./config.ts";
 
 const FAVICON = readFileSync(new URL("../../public/favicon.svg", import.meta.url), "utf8");
 const BUCKET = readFileSync(new URL("./bucket.ts", import.meta.url), "utf8");
@@ -62,5 +62,24 @@ describe("the mark's artwork", () => {
 
   it("keeps the water a blue, not the theme's other state colours", () => {
     expect(FAVICON).toContain("#00BAFE");
+  });
+});
+
+describe("the web app manifest", () => {
+  // Static JSON in `public/`, so it cannot import the constants; this keeps it honest.
+  const manifest = JSON.parse(
+    readFileSync(new URL("../../public/manifest.webmanifest", import.meta.url), "utf8"),
+  ) as { name: string; short_name: string; description: string; icons: { src: string }[] };
+
+  it("names the app the way the page does", () => {
+    expect(manifest.name).toBe(APP_NAME_AR);
+    expect(manifest.short_name).toBe(WORDMARK_AR);
+    expect(manifest.description).toBe(TAGLINE_AR);
+  });
+
+  it("points at icons that exist", () => {
+    for (const icon of manifest.icons) {
+      expect(() => readFileSync(new URL(`../../public${icon.src}`, import.meta.url))).not.toThrow();
+    }
   });
 });
