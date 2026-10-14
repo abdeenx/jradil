@@ -51,6 +51,7 @@ Uniqueness is scoped per shape with partial indexes:
 - `day_datekey_unique` — one puzzle per day, ever
 - `settings_key_unique` — one settings document
 - `unknown_normalized_unique` — one queue row per folded spelling
+- `subscription_endpoint_unique` — one row per browser subscription
 
 The two word flags mean different things and are worth keeping apart:
 
@@ -113,6 +114,59 @@ The dictionary, which is loaded in bulk and then left alone.
 - Per-row **بيانات** opens the metadata editor: the learn-more link the player
   will see, and a private note.
 - The dictionary-validation switch, next to the count of words it applies to.
+
+## Daily reminder
+
+Players can ask to be reminded when the new word lands. The card sits below the
+board — never a modal, so it does not interrupt a game — and is only shown while
+the answer is still open:
+
+| State                       | What the player sees                                                                          |
+| --------------------------- | --------------------------------------------------------------------------------------------- |
+| Supported, not yet asked    | **ذكّرني بكلمة اليوم** with an enable button and a **لاحقًا** dismissal                          |
+| Subscribed                  | A line confirming it, with **إيقاف**                                                          |
+| Declined, or dismissed      | Nothing, until the dismissal lapses after a week                                              |
+| iOS, not installed          | A note to add the site to the home screen first — iOS only delivers push to an installed site |
+| No VAPID keys on the server | A note that reminders are not set up                                                          |
+
+**The reminder goes out at 15:00 Khartoum (13:00 UTC)**, for whoever subscribed.
+Nothing is stored about who a subscriber is: a subscription is an endpoint and two
+keys, so there is no account and no personal data.
+
+### How it fires
+
+A ticker inside the server process asks once a minute whether the reminder is due,
+and the claim is recorded in the database before anything is sent. Three
+consequences worth knowing:
+
+- **It self-heals.** The check is "is it past 15:00 and has today not been sent",
+  not "sleep until 15:00" — so a restart, a paused container or a clock change
+  still sends the day's reminder. A day nobody was up for is not back-filled.
+- **It cannot double-send.** The daily claim is a single conditional write, so two
+  ticks — or two containers — cannot both decide to send.
+- **It needs no external scheduler.** The ticker starts on the first request the
+  server handles, which includes a container healthcheck, so a platform that
+  probes the app arms it immediately.
+
+If you would rather drive it from a scheduler you control:
+
+```bash
+curl -X POST "https://your-host/api/cron/reminder?secret=$CRON_SECRET"
+```
+
+The endpoint is safe to call at any time; it decides for itself whether there is
+anything to do.
+
+### Setting it up
+
+Generate a key pair per deployment, and keep the private key on the server:
+
+```bash
+node -e "console.log(require('web-push').generateVAPIDKeys())"
+```
+
+Changing the keys invalidates every existing subscription — browsers will simply
+re-subscribe when the player next visits, but they will miss a reminder until then.
 
 ## Words the dictionary refuses
 

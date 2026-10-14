@@ -19,6 +19,7 @@ import { MAX_ATTEMPTS, WORD_LETTER_COUNT } from "#/lib/config.ts";
 import { optionalEnv } from "#/lib/env.ts";
 import { signProgress, verifyProgress } from "#/lib/progress.ts";
 import { dayEndUtc, dayStartUtc, isDateKey, sudanDateKey, type DateKey } from "#/lib/sudan-time.ts";
+import { startReminderScheduler } from "#/lib/push-scheduler.ts";
 import { recordUnknownWord } from "#/lib/unknown-words.ts";
 import { getGameSecret, getSettings, getWordByText, resolveDay, wordExists } from "#/lib/words.ts";
 
@@ -84,6 +85,11 @@ function puzzlePayload(dateKey: DateKey, state: PuzzleState, now: Date): PuzzleP
 /** Everything the board needs before the first guess, and nothing that spoils it. */
 export const getPuzzle = createServerFn({ method: "GET" }).handler(
   async (): Promise<PuzzlePayload> => {
+    // Loading the game is the first request of a new container, and that is where
+    // the daily reminder's ticker starts. Idempotent: after the first call it is
+    // a property read. See `push-scheduler.ts` for why it is not a boot hook.
+    startReminderScheduler();
+
     const now = new Date();
     const today = sudanDateKey(now);
     const resolution = await resolveDay(today);

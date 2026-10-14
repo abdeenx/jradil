@@ -6,6 +6,7 @@ import { Confetti } from "#/components/Confetti.tsx";
 import { Countdown } from "#/components/Countdown.tsx";
 import { GameBoard } from "#/components/GameBoard.tsx";
 import { Keyboard } from "#/components/Keyboard.tsx";
+import { ReminderPrompt } from "#/components/ReminderPrompt.tsx";
 import { ResultDialog } from "#/components/ResultDialog.tsx";
 import { SiteHeader } from "#/components/SiteHeader.tsx";
 import { useDailyGame } from "#/hooks/useDailyGame.ts";
@@ -127,6 +128,8 @@ function GamePage() {
 
             {/* Teaches the colours once, then gets out of the way. */}
             {game.rows.length === 0 ? <Legend /> : null}
+
+            <ReminderPrompt />
           </div>
         ) : (
           <div className="mx-auto max-w-md">
