@@ -65,3 +65,44 @@ export function buildShareText(input: ShareInput): string {
   // the part people actually read.
   return `${board.join("\n")}\n\n${footer.join("\n")}`;
 }
+
+/** What the browser offers for getting the text out. Injected so it can be tested. */
+export type ShareTarget = {
+  /** `navigator.share`, when the browser has one. */
+  share?: (data: ShareData) => Promise<void>;
+  canShare?: (data: ShareData) => boolean;
+  /** Whether this is a phone or tablet, where the system share sheet is the natural place. */
+  touch: boolean;
+  copy: (text: string) => Promise<void>;
+};
+
+export type ShareOutcome = "shared" | "cancelled" | "copied" | "failed";
+
+/**
+ * Hands the result to the system share sheet on a phone, so the player can pick
+ * WhatsApp (a chat or their status), or any other app, and copies it elsewhere.
+ *
+ * Must be called straight from the click, with nothing awaited first: browsers
+ * only open the share sheet in response to a fresh user gesture.
+ */
+export async function deliverShareText(text: string, target: ShareTarget): Promise<ShareOutcome> {
+  // Text only, no separate `url`: the address is already in the text, and some
+  // apps keep only one of the two fields when given both.
+  const data: ShareData = { text };
+  if (target.touch && target.share && (target.canShare?.(data) ?? true)) {
+    try {
+      await target.share(data);
+      return "shared";
+    } catch (error) {
+      // The player closed the sheet: they chose not to share, so nothing else happens.
+      if (error instanceof DOMException && error.name === "AbortError") return "cancelled";
+      // Anything else (no share targets, a policy block): copying still works.
+    }
+  }
+  try {
+    await target.copy(text);
+    return "copied";
+  } catch {
+    return "failed";
+  }
+}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { APP_NAME_AR, MAX_ATTEMPTS } from "#/lib/config.ts";
 import type { GameRow, GameStatus } from "#/lib/game.ts";
-import { buildShareText } from "#/lib/share.ts";
+import { buildShareText, deliverShareText } from "#/lib/share.ts";
 import { shortDateKey, type DateKey } from "#/lib/sudan-time.ts";
 import { isSafeExternalLink } from "#/lib/url.ts";
 
@@ -80,12 +80,16 @@ export function ResultDialog({
       appUrl,
     });
 
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
+    const outcome = await deliverShareText(text, {
+      share: typeof navigator.share === "function" ? (data) => navigator.share(data) : undefined,
+      canShare:
+        typeof navigator.canShare === "function" ? (data) => navigator.canShare(data) : undefined,
+      // A phone or tablet: no mouse to hover with. Desktop share sheets are a
+      // detour for what is usually a paste into a chat, so desktops copy.
+      touch: window.matchMedia("(hover: none) and (pointer: coarse)").matches,
+      copy: (value) => navigator.clipboard.writeText(value),
+    });
+    setCopied(outcome === "copied");
   }
 
   return (

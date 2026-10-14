@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { SHARE_TILES, buildShareText, shareGrid, type ShareInput } from "./share.ts";
+import {
+  SHARE_TILES,
+  buildShareText,
+  deliverShareText,
+  shareGrid,
+  type ShareInput,
+  type ShareTarget,
+} from "./share.ts";
 
 const BASE: ShareInput = {
   appName: "جرادل",
@@ -99,5 +106,63 @@ describe("buildShareText", () => {
   it("writes the address after the countdown, not before", () => {
     const text = buildShareText(BASE);
     expect(text.indexOf("الكلمة القادمة بعد")).toBeLessThan(text.indexOf("https://"));
+  });
+});
+
+describe("deliverShareText", () => {
+  function target(overrides: Partial<ShareTarget> = {}) {
+    const calls = { shared: [] as ShareData[], copied: [] as string[] };
+    const value: ShareTarget = {
+      share: async (data) => {
+        calls.shared.push(data);
+      },
+      touch: true,
+      copy: async (text) => {
+        calls.copied.push(text);
+      },
+      ...overrides,
+    };
+    return { value, calls };
+  }
+
+  it("opens the system share sheet on a phone, with the text alone", async () => {
+    const { value, calls } = target();
+    expect(await deliverShareText("نص", value)).toBe("shared");
+    expect(calls.shared).toEqual([{ text: "نص" }]);
+    expect(calls.copied).toEqual([]);
+  });
+
+  it("does nothing more when the player closes the sheet", async () => {
+    const { value, calls } = target({
+      share: () => Promise.reject(new DOMException("cancelled", "AbortError")),
+    });
+    expect(await deliverShareText("نص", value)).toBe("cancelled");
+    expect(calls.copied).toEqual([]);
+  });
+
+  it("copies when the sheet cannot open", async () => {
+    const { value, calls } = target({
+      share: () => Promise.reject(new DOMException("blocked", "NotAllowedError")),
+    });
+    expect(await deliverShareText("نص", value)).toBe("copied");
+    expect(calls.copied).toEqual(["نص"]);
+  });
+
+  it("copies on a desktop, a browser without sharing, or text it cannot share", async () => {
+    for (const overrides of [
+      { touch: false },
+      { share: undefined },
+      { canShare: () => false },
+    ] satisfies Partial<ShareTarget>[]) {
+      const { value, calls } = target(overrides);
+      expect(await deliverShareText("نص", value)).toBe("copied");
+      expect(calls.shared).toEqual([]);
+      expect(calls.copied).toEqual(["نص"]);
+    }
+  });
+
+  it("reports a failure when copying is refused too", async () => {
+    const { value } = target({ touch: false, copy: () => Promise.reject(new Error("denied")) });
+    expect(await deliverShareText("نص", value)).toBe("failed");
   });
 });
