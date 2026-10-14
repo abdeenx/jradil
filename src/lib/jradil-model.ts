@@ -21,7 +21,6 @@
 import mongoose, { Schema } from "mongoose";
 
 import { COLLECTION_NAME, DEFAULT_POOL_SIZE, WORD_LETTER_COUNT } from "./config.ts";
-import { DEFAULT_REMINDER_TIME } from "./reminder.ts";
 
 /** Discriminator key. Named `kind` so raw documents read clearly in Atlas. */
 export const DOC_KIND_KEY = "kind";
@@ -115,31 +114,6 @@ const settingsSchema = new Schema({
    * use and never sent to a client.
    */
   secret: { type: String, default: null },
-  /**
-   * The last Sudan day the daily reminder went out for.
-   *
-   * Held in the database rather than in memory so a restart cannot send twice,
-   * and a restart after the send time can still send the day it missed.
-   */
-  lastReminderDateKey: { type: String, default: null },
-  /**
-   * Sudan-local time the daily reminder goes out. Editable from the dashboard,
-   * so the operator never has to redeploy to move it.
-   */
-  reminderHour: {
-    type: Number,
-    required: true,
-    default: DEFAULT_REMINDER_TIME.hour,
-    min: 0,
-    max: 23,
-  },
-  reminderMinute: {
-    type: Number,
-    required: true,
-    default: DEFAULT_REMINDER_TIME.minute,
-    min: 0,
-    max: 59,
-  },
 });
 
 settingsSchema.index(
@@ -173,49 +147,18 @@ unknownSchema.index(
 // The queue is shown most-tried first, and cleared wholesale when reviewed.
 unknownSchema.index({ count: -1 }, { name: "unknown_count" });
 
-/**
- * One browser's push subscription.
- *
- * Anonymous on purpose: subscribing needs no account, so this holds only what
- * the push service needs to deliver a notification. `endpoint` is issued by the
- * browser and is unique per subscription, which makes it the natural key.
- */
-const subscriptionSchema = new Schema({
-  endpoint: { type: String, required: true },
-  /** The browser's public key, and the shared secret, for encrypting the payload. */
-  keys: {
-    p256dh: { type: String, required: true },
-    auth: { type: String, required: true },
-  },
-  /** Last time a notification was accepted for this subscription. */
-  lastSentAt: { type: Date, default: null },
-  /** Consecutive delivery failures. Pruned once it looks abandoned. */
-  failures: { type: Number, required: true, default: 0 },
-});
-
-subscriptionSchema.index(
-  { endpoint: 1 },
-  {
-    name: "subscription_endpoint_unique",
-    unique: true,
-    partialFilterExpression: { kind: "subscription" },
-  },
-);
-
 // ------------------------------------------------------------- domain types --
 
 export type WordRecord = mongoose.InferSchemaType<typeof wordSchema> & Timestamps;
 export type DayRecord = mongoose.InferSchemaType<typeof daySchema> & Timestamps;
 export type SettingsRecord = mongoose.InferSchemaType<typeof settingsSchema> & Timestamps;
 export type UnknownRecord = mongoose.InferSchemaType<typeof unknownSchema> & Timestamps;
-export type SubscriptionRecord = mongoose.InferSchemaType<typeof subscriptionSchema> & Timestamps;
 export type DayRevision = mongoose.InferSchemaType<typeof revisionSchema>;
 
 export type WordDocument = mongoose.HydratedDocument<WordRecord>;
 export type DayDocument = mongoose.HydratedDocument<DayRecord>;
 export type SettingsDocument = mongoose.HydratedDocument<SettingsRecord>;
 export type UnknownDocument = mongoose.HydratedDocument<UnknownRecord>;
-export type SubscriptionDocument = mongoose.HydratedDocument<SubscriptionRecord>;
 
 export type Models = {
   Base: mongoose.Model<Record<string, unknown>>;
@@ -223,7 +166,6 @@ export type Models = {
   Day: mongoose.Model<DayRecord, Record<string, never>, Record<string, never>>;
   Settings: mongoose.Model<SettingsRecord, Record<string, never>, Record<string, never>>;
   Unknown: mongoose.Model<UnknownRecord, Record<string, never>, Record<string, never>>;
-  Subscription: mongoose.Model<SubscriptionRecord, Record<string, never>, Record<string, never>>;
 };
 
 // ---------------------------------------------------------------- models --
@@ -258,11 +200,7 @@ function buildModels(): Models {
     registered.Unknown ??
     (Base.discriminator("unknown", unknownSchema) as unknown as Models["Unknown"]);
 
-  const Subscription =
-    registered.Subscription ??
-    (Base.discriminator("subscription", subscriptionSchema) as unknown as Models["Subscription"]);
-
-  return { Base, Word, Day, Settings, Unknown, Subscription };
+  return { Base, Word, Day, Settings, Unknown };
 }
 
 const globalForModels = globalThis as unknown as { __jradilModels?: Models };
@@ -275,6 +213,5 @@ export const Word = models.Word;
 export const Day = models.Day;
 export const Settings = models.Settings;
 export const Unknown = models.Unknown;
-export const Subscription = models.Subscription;
 
 export { WORD_LETTER_COUNT };

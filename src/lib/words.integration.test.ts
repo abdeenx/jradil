@@ -1,10 +1,5 @@
 /**
- * Integration tests for the whole data layer: words, days, the review queue and
- * the push subscriptions.
- *
- * One file rather than several because they all share the single `jradil`
- * collection and the one connection: separate files would race over which
- * scratch database they are pointed at.
+ * Integration tests for the puzzle's data layer.
  *
  * These need a live MongoDB. They are skipped when `MONGODB_URI` is not set, so
  * `vp test` stays green on a machine with no database, and they run for real
@@ -22,7 +17,6 @@ import { loadEnv } from "./env.ts";
 import { Word } from "./jradil-model.ts";
 import { addDays, sudanDateKey } from "./sudan-time.ts";
 import { importWords } from "./word-import.ts";
-import { countSubscriptions, removeSubscription, runReminder, saveSubscription } from "./push.ts";
 import {
   addUnknownWords,
   countUnknownWords,
@@ -569,119 +563,6 @@ describe.skipIf(!connectionString)("words against a live MongoDB", () => {
       await expect(recordUnknownWord("")).resolves.toBeUndefined();
       await expect(recordUnknownWord("   ")).resolves.toBeUndefined();
       await expect(countUnknownWords()).resolves.toBe(0);
-    });
-  });
-
-  describe("push subscriptions", () => {
-    const endpoint = "https://push.example.com/abc123";
-
-    it("stores a subscription", async () => {
-      await expect(
-        saveSubscription({ endpoint, keys: { p256dh: "key", auth: "secret" } }),
-      ).resolves.toMatchObject({ ok: true });
-      await expect(countSubscriptions()).resolves.toBe(1);
-    });
-
-    it("does not store the same endpoint twice", async () => {
-      await saveSubscription({ endpoint, keys: { p256dh: "key", auth: "secret" } });
-      await saveSubscription({ endpoint, keys: { p256dh: "newer", auth: "newer" } });
-      await expect(countSubscriptions()).resolves.toBe(1);
-    });
-
-    it("refuses an incomplete or non-https subscription", async () => {
-      await expect(
-        saveSubscription({ endpoint: "", keys: { p256dh: "k", auth: "a" } }),
-      ).resolves.toMatchObject({ ok: false });
-      await expect(
-        saveSubscription({
-          endpoint: "http://push.example.com/x",
-          keys: { p256dh: "k", auth: "a" },
-        }),
-      ).resolves.toMatchObject({ ok: false });
-      await expect(
-        saveSubscription({
-          endpoint: "https://push.example.com/y",
-          keys: { p256dh: "", auth: "" },
-        }),
-      ).resolves.toMatchObject({ ok: false });
-      await expect(countSubscriptions()).resolves.toBe(1);
-    });
-
-    it("forgets a subscription when it is turned off", async () => {
-      await expect(removeSubscription(endpoint)).resolves.toMatchObject({ removed: 1 });
-      await expect(countSubscriptions()).resolves.toBe(0);
-    });
-  });
-
-  describe("the daily reminder", () => {
-    const beforeSend = new Date("2026-10-14T12:00:00Z"); // 14:00 Khartoum
-    const afterSend = new Date("2026-10-14T13:00:00Z"); // 15:00 Khartoum
-
-    /**
-     * The day the last reminder went out for.
-     *
-     * Read from the document rather than through `getSettings`, which exposes
-     * only the fields the operator edits — this one is the scheduler's own
-     * bookkeeping, and it is the thing that stops a second send.
-     */
-    async function reminderMarker(): Promise<string | null> {
-      const settings = await mongoose.connection.db
-        ?.collection("jradil")
-        .findOne({ kind: "settings" });
-      return (settings?.lastReminderDateKey as string | undefined) ?? null;
-    }
-
-    it("does nothing before the send time", async () => {
-      await expect(runReminder(beforeSend)).resolves.toMatchObject({
-        sent: false,
-        reason: "not-due",
-        dateKey: "2026-10-14",
-      });
-    });
-
-    it("sends once the time has come, and records the day", async () => {
-      // No subscribers, so this exercises the claim without any network hop.
-      await expect(countSubscriptions()).resolves.toBe(0);
-      await expect(runReminder(afterSend)).resolves.toMatchObject({
-        sent: true,
-        reason: "sent",
-        dateKey: "2026-10-14",
-      });
-      await expect(reminderMarker()).resolves.toBe("2026-10-14");
-    });
-
-    it("never sends the same day twice", async () => {
-      // The tick fires every minute; a second send would notify everyone again.
-      await expect(runReminder(new Date("2026-10-14T14:00:00Z"))).resolves.toMatchObject({
-        sent: false,
-        reason: "already-sent",
-      });
-    });
-
-    it("sends again the next day", async () => {
-      await expect(runReminder(new Date("2026-10-15T13:00:00Z"))).resolves.toMatchObject({
-        sent: true,
-        reason: "sent",
-        dateKey: "2026-10-15",
-      });
-    });
-
-    it("catches up when the server was down at the send time", async () => {
-      // A restart at 20:00 Khartoum still owes the day its reminder.
-      await expect(runReminder(new Date("2026-10-16T18:00:00Z"))).resolves.toMatchObject({
-        sent: true,
-        dateKey: "2026-10-16",
-      });
-    });
-
-    it("does not back-fill days that passed while it was down", async () => {
-      // Jumping two days sends today's only: a reminder for a word that is gone
-      // helps nobody.
-      await expect(runReminder(new Date("2026-10-19T13:00:00Z"))).resolves.toMatchObject({
-        sent: true,
-        dateKey: "2026-10-19",
-      });
-      await expect(reminderMarker()).resolves.toBe("2026-10-19");
     });
   });
 });

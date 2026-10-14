@@ -32,7 +32,6 @@ import {
   type AddUnknownResult,
   type UnknownWordsPage,
 } from "#/lib/unknown-words.ts";
-import { countSubscriptions } from "#/lib/push.ts";
 import { importWords, type ImportSummary } from "#/lib/word-import.ts";
 import {
   bulkUpdateWords,
@@ -113,8 +112,6 @@ export type DashboardPayload = {
   usedWords: UsedWordsPage;
   /** How many words players tried that the dictionary does not have. */
   unknownCount: number;
-  /** How many browsers have asked for the daily reminder. */
-  subscribers: number;
 };
 
 export const getDashboard = createServerFn({ method: "GET" })
@@ -129,15 +126,13 @@ export const getDashboard = createServerFn({ method: "GET" })
     // pool runway report a candidate the day has already consumed.
     const todayResolution = await resolveDay(today);
 
-    const [tomorrowScheduled, stats, settings, usedWords, unknownCount, subscribers] =
-      await Promise.all([
-        getDay(tomorrow),
-        getStats(),
-        getSettings(),
-        listUsedWords({ page: data?.usedPage ?? 1, pageSize: 20 }),
-        countUnknownWords(),
-        countSubscriptions(),
-      ]);
+    const [tomorrowScheduled, stats, settings, usedWords, unknownCount] = await Promise.all([
+      getDay(tomorrow),
+      getStats(),
+      getSettings(),
+      listUsedWords({ page: data?.usedPage ?? 1, pageSize: 20 }),
+      countUnknownWords(),
+    ]);
 
     return {
       today,
@@ -148,7 +143,6 @@ export const getDashboard = createServerFn({ method: "GET" })
       settings,
       usedWords,
       unknownCount,
-      subscribers,
     };
   });
 
@@ -373,8 +367,6 @@ export const adminUpdateSettings = createServerFn({ method: "POST" })
     z.object({
       poolSize: z.number().int().min(1).max(500).optional(),
       enforceDictionary: z.boolean().optional(),
-      reminderHour: z.number().int().min(0).max(23).optional(),
-      reminderMinute: z.number().int().min(0).max(59).optional(),
     }),
   )
   .handler(async ({ data }): Promise<SettingsView> => {
