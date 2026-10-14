@@ -18,6 +18,13 @@ import { Word } from "./jradil-model.ts";
 import { addDays, sudanDateKey } from "./sudan-time.ts";
 import { importWords } from "./word-import.ts";
 import {
+  addUnknownWords,
+  countUnknownWords,
+  forgetUnknownWords,
+  listUnknownWords,
+  recordUnknownWord,
+} from "./unknown-words.ts";
+import {
   bulkUpdateWords,
   clearDayWord,
   getSettings,
@@ -466,6 +473,96 @@ describe.skipIf(!connectionString)("words against a live MongoDB", () => {
         status: "ready",
         day: { wordText: "زيتون", source: "admin" },
       });
+    });
+  });
+
+  describe("words the dictionary refused", () => {
+    it("collects a word a player tried, counting repeats", async () => {
+      await recordUnknownWord("زقزقه");
+      await recordUnknownWord("زقزقة"); // the same word, folded
+      await recordUnknownWord("زقزقه");
+
+      const queue = await listUnknownWords({ pageSize: 50 });
+      const entry = queue.items.find((item) => item.text === "زقزقه");
+      expect(entry).toBeDefined();
+      expect(entry?.count).toBe(3);
+    });
+
+    it("keeps one row per word however it was spelled", async () => {
+      const queue = await listUnknownWords({ pageSize: 50 });
+      const rows = queue.items.filter((item) => item.text.replace("ة", "ه") === "زقزقه");
+      expect(rows).toHaveLength(1);
+    });
+
+    it("shows the most-tried words first", async () => {
+      await recordUnknownWord("نمنمه");
+      const queue = await listUnknownWords({ pageSize: 50 });
+      const counts = queue.items.map((item) => item.count);
+      expect([...counts].sort((a, b) => b - a)).toEqual(counts);
+    });
+
+    it("adds one word to the dictionary and clears it from the queue", async () => {
+      const before = await countUnknownWords();
+      const queue = await listUnknownWords({ pageSize: 50 });
+      const entry = queue.items.find((item) => item.text === "زقزقه");
+      expect(entry).toBeDefined();
+
+      const result = await addUnknownWords([entry!.id], {});
+      expect(result).toMatchObject({ added: 1, alreadyKnown: 0 });
+      expect(await countUnknownWords()).toBe(before - 1);
+
+      // It is a dictionary word now, and not eligible to be the word of the day.
+      await expect(getWordByText("زقزقه")).resolves.toMatchObject({
+        dialect: false,
+        pool: false,
+      });
+    });
+
+    it("adds the rest in bulk, optionally as Sudanese", async () => {
+      await recordUnknownWord("بربشه");
+      await recordUnknownWord("تقمقن");
+
+      const result = await addUnknownWords(null, { dialect: true });
+      expect(result.added).toBeGreaterThanOrEqual(2);
+      await expect(getWordByText("بربشه")).resolves.toMatchObject({ dialect: true });
+      await expect(countUnknownWords()).resolves.toBe(0);
+    });
+
+    it("counts a word already in the dictionary instead of adding it twice", async () => {
+      await recordUnknownWord("مدرسه");
+      const queue = await listUnknownWords({ pageSize: 50 });
+      const entry = queue.items.find((item) => item.text === "مدرسه");
+      expect(entry).toBeDefined();
+
+      const result = await addUnknownWords([entry!.id], {});
+      expect(result).toMatchObject({ added: 0, alreadyKnown: 1 });
+      // The dictionary already had it, so the row still goes.
+      await expect(countUnknownWords()).resolves.toBe(0);
+    });
+
+    it("drops a word without adding it", async () => {
+      await recordUnknownWord("خرخشه");
+      const queue = await listUnknownWords({ pageSize: 50 });
+      const entry = queue.items.find((item) => item.text === "خرخشه");
+
+      await expect(forgetUnknownWords([entry!.id])).resolves.toMatchObject({ removed: 1 });
+      await expect(getWordByText("خرخشه")).resolves.toBeNull();
+    });
+
+    it("clears the whole queue", async () => {
+      await recordUnknownWord("جلجله");
+      await recordUnknownWord("صلصله");
+      await expect(countUnknownWords()).resolves.toBeGreaterThan(0);
+
+      const result = await forgetUnknownWords(null);
+      expect(result.removed).toBeGreaterThan(0);
+      await expect(countUnknownWords()).resolves.toBe(0);
+    });
+
+    it("ignores a blank word instead of queueing an empty row", async () => {
+      await expect(recordUnknownWord("")).resolves.toBeUndefined();
+      await expect(recordUnknownWord("   ")).resolves.toBeUndefined();
+      await expect(countUnknownWords()).resolves.toBe(0);
     });
   });
 });

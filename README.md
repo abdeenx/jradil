@@ -50,6 +50,7 @@ Uniqueness is scoped per shape with partial indexes:
 - `word_normalized_unique` — one document per folded spelling
 - `day_datekey_unique` — one puzzle per day, ever
 - `settings_key_unique` — one settings document
+- `unknown_normalized_unique` — one queue row per folded spelling
 
 The two word flags mean different things and are worth keeping apart:
 
@@ -112,6 +113,36 @@ The dictionary, which is loaded in bulk and then left alone.
 - Per-row **بيانات** opens the metadata editor: the learn-more link the player
   will see, and a private note.
 - The dictionary-validation switch, next to the count of words it applies to.
+
+## Words the dictionary refuses
+
+When a player types a word the game does not know, the guess is rejected — and the word is
+recorded. Players are the best source of what the dictionary is missing, and they also
+mistype, so the result is a **review queue** rather than a list that only grows.
+
+`/admin/words` shows it at the top, most-tried first, with a count per word:
+
+- **أضف** — adds that one word to the dictionary
+- **تجاهل** — drops it, for the mistypes
+- **أضف الكل إلى القاموس** / **تجاهل الكل** — empties the whole queue either way
+- **علّمها كلمات سودانية** — a switch that applies to whichever add you use. Off by
+  default: a word a player reached for is a valid _guess_, which is not the same as a word
+  worth serving as the answer.
+
+The dashboard shows a count next to the dictionary totals whenever the queue is not empty,
+so it is visible without going looking.
+
+Two deliberate decisions:
+
+- **The same word counts up rather than repeating.** Keyed on the folded spelling, so `زقزقه`
+  and `زقزقة` are one row and repeated attempts raise its position instead of filling the
+  queue with duplicates.
+- **Recording never changes the outcome of a guess.** It is wrapped so a failure to write
+  the queue cannot turn an accepted guess into an error, and words are collected whether or
+  not dictionary enforcement is on — so the gap in the dictionary shows up either way.
+
+For a step-by-step check of this on a live site, see
+[docs/unknown-words.md](docs/unknown-words.md).
 
 ## Loading the dictionary in phases
 

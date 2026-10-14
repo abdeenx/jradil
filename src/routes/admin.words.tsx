@@ -1,6 +1,7 @@
 import { createFileRoute, useRouter, type SearchSchemaInput } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
+import { UnknownWordsPanel } from "#/components/admin/UnknownWordsPanel.tsx";
 import { WordEditDialog } from "#/components/admin/WordEditDialog.tsx";
 import { WORD_LETTER_COUNT } from "#/lib/config.ts";
 import { enumParam, pageParam, textParam } from "#/lib/search-params.ts";
@@ -12,6 +13,7 @@ import {
   adminDeleteWord,
   adminGetSettings,
   adminImportWords,
+  adminListUnknownWords,
   adminListWords,
   adminUpdateSettings,
   adminUpdateWord,
@@ -30,12 +32,15 @@ const SCOPE_LABELS: Record<Scope, string> = {
 
 export const Route = createFileRoute("/admin/words")({
   validateSearch: (
-    search: { q?: unknown; scope?: unknown; page?: unknown } & SearchSchemaInput,
+    search: { q?: unknown; scope?: unknown; page?: unknown; queue?: unknown } & SearchSchemaInput,
   ) => ({
     // The server refuses a longer search term.
     q: textParam(search.q, 200),
     scope: enumParam(search.scope, SCOPES, "all"),
     page: pageParam(search.page),
+    // The review queue pages separately: emptying it is a different job from
+    // browsing the dictionary.
+    queue: pageParam(search.queue),
   }),
   loaderDeps: ({ search }) => search,
   loader: async ({ deps }) => {
@@ -50,19 +55,20 @@ export const Route = createFileRoute("/admin/words")({
               ? { served: false }
               : {};
 
-    const [words, settings] = await Promise.all([
+    const [words, settings, unknown] = await Promise.all([
       adminListWords({
         data: { ...filter, search: deps.q || undefined, page: deps.page, pageSize: 50 },
       }),
       adminGetSettings(),
+      adminListUnknownWords({ data: { page: deps.queue, pageSize: 30 } }),
     ]);
-    return { words, settings };
+    return { words, settings, unknown };
   },
   component: WordsPage,
 });
 
 function WordsPage() {
-  const { words, settings } = Route.useLoaderData();
+  const { words, settings, unknown } = Route.useLoaderData();
   const { items, total, page, pageSize } = words;
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -101,6 +107,12 @@ function WordsPage() {
 
   return (
     <div className="space-y-5">
+      <UnknownWordsPanel
+        queue={unknown}
+        page={search.queue}
+        onPageChange={(next) => void navigate({ search: { ...search, queue: next } })}
+      />
+
       <ImportPanel onDone={() => void router.invalidate()} />
 
       <section className="card bg-base-100 border-base-300 border">

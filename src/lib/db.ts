@@ -11,7 +11,7 @@ import "@tanstack/react-start/server-only";
 import mongoose from "mongoose";
 
 import { optionalEnv, requireEnv } from "./env.ts";
-import { Day, Settings, Word } from "./jradil-model.ts";
+import { Day, Settings, Unknown, Word } from "./jradil-model.ts";
 
 type ConnectionCache = { promise: Promise<typeof mongoose> | null };
 
@@ -72,7 +72,7 @@ let schemaReady: Promise<void> | null = null;
 export function ensureSchema(): Promise<void> {
   schemaReady ??= (async () => {
     await connectDb();
-    for (const model of [Word, Day, Settings]) {
+    for (const model of [Word, Day, Settings, Unknown]) {
       try {
         await model.createIndexes();
       } catch (error) {

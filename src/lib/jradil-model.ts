@@ -121,22 +121,51 @@ settingsSchema.index(
   { name: "settings_key_unique", unique: true, partialFilterExpression: { kind: "settings" } },
 );
 
+/**
+ * A word a player submitted that the dictionary does not contain.
+ *
+ * Not a dictionary entry and not part of a day: a review queue. Players are the
+ * best source of what the dictionary is missing, and this is how those words
+ * reach the operator. Keyed on the folded spelling, so the same word typed
+ * repeatedly counts up rather than filling the queue with duplicates.
+ */
+const unknownSchema = new Schema({
+  /** As first typed, for display. */
+  text: { type: String, required: true },
+  /** Folded spelling. Uniqueness and lookups are based on this. */
+  normalized: { type: String, required: true },
+  /** How many times players have tried it. */
+  count: { type: Number, required: true, default: 1 },
+  firstAt: { type: Date, required: true },
+  lastAt: { type: Date, required: true },
+});
+
+unknownSchema.index(
+  { normalized: 1 },
+  { name: "unknown_normalized_unique", unique: true, partialFilterExpression: { kind: "unknown" } },
+);
+// The queue is shown most-tried first, and cleared wholesale when reviewed.
+unknownSchema.index({ count: -1 }, { name: "unknown_count" });
+
 // ------------------------------------------------------------- domain types --
 
 export type WordRecord = mongoose.InferSchemaType<typeof wordSchema> & Timestamps;
 export type DayRecord = mongoose.InferSchemaType<typeof daySchema> & Timestamps;
 export type SettingsRecord = mongoose.InferSchemaType<typeof settingsSchema> & Timestamps;
+export type UnknownRecord = mongoose.InferSchemaType<typeof unknownSchema> & Timestamps;
 export type DayRevision = mongoose.InferSchemaType<typeof revisionSchema>;
 
 export type WordDocument = mongoose.HydratedDocument<WordRecord>;
 export type DayDocument = mongoose.HydratedDocument<DayRecord>;
 export type SettingsDocument = mongoose.HydratedDocument<SettingsRecord>;
+export type UnknownDocument = mongoose.HydratedDocument<UnknownRecord>;
 
 export type Models = {
   Base: mongoose.Model<Record<string, unknown>>;
   Word: mongoose.Model<WordRecord, Record<string, never>, Record<string, never>>;
   Day: mongoose.Model<DayRecord, Record<string, never>, Record<string, never>>;
   Settings: mongoose.Model<SettingsRecord, Record<string, never>, Record<string, never>>;
+  Unknown: mongoose.Model<UnknownRecord, Record<string, never>, Record<string, never>>;
 };
 
 // ---------------------------------------------------------------- models --
@@ -167,7 +196,11 @@ function buildModels(): Models {
     registered.Settings ??
     (Base.discriminator("settings", settingsSchema) as unknown as Models["Settings"]);
 
-  return { Base, Word, Day, Settings };
+  const Unknown =
+    registered.Unknown ??
+    (Base.discriminator("unknown", unknownSchema) as unknown as Models["Unknown"]);
+
+  return { Base, Word, Day, Settings, Unknown };
 }
 
 const globalForModels = globalThis as unknown as { __jradilModels?: Models };
@@ -179,5 +212,6 @@ globalForModels.__jradilModels = models;
 export const Word = models.Word;
 export const Day = models.Day;
 export const Settings = models.Settings;
+export const Unknown = models.Unknown;
 
 export { WORD_LETTER_COUNT };

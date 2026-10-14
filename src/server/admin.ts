@@ -24,6 +24,14 @@ import {
 import { toLetters } from "#/lib/arabic.ts";
 import { WORD_LETTER_COUNT } from "#/lib/config.ts";
 import { addDays, isDateKey, sudanDateKey, type DateKey } from "#/lib/sudan-time.ts";
+import {
+  addUnknownWords,
+  countUnknownWords,
+  forgetUnknownWords,
+  listUnknownWords,
+  type AddUnknownResult,
+  type UnknownWordsPage,
+} from "#/lib/unknown-words.ts";
 import { importWords, type ImportSummary } from "#/lib/word-import.ts";
 import {
   bulkUpdateWords,
@@ -102,6 +110,8 @@ export type DashboardPayload = {
   settings: SettingsView;
   /** Every word that has already had its day, so a manual repeat is a choice. */
   usedWords: UsedWordsPage;
+  /** How many words players tried that the dictionary does not have. */
+  unknownCount: number;
 };
 
 export const getDashboard = createServerFn({ method: "GET" })
@@ -116,11 +126,12 @@ export const getDashboard = createServerFn({ method: "GET" })
     // pool runway report a candidate the day has already consumed.
     const todayResolution = await resolveDay(today);
 
-    const [tomorrowScheduled, stats, settings, usedWords] = await Promise.all([
+    const [tomorrowScheduled, stats, settings, usedWords, unknownCount] = await Promise.all([
       getDay(tomorrow),
       getStats(),
       getSettings(),
       listUsedWords({ page: data?.usedPage ?? 1, pageSize: 20 }),
+      countUnknownWords(),
     ]);
 
     return {
@@ -131,6 +142,7 @@ export const getDashboard = createServerFn({ method: "GET" })
       stats,
       settings,
       usedWords,
+      unknownCount,
     };
   });
 
@@ -244,6 +256,47 @@ export const adminPreviewWord = createServerFn({ method: "POST" })
       };
     },
   );
+
+// ------------------------------------------------------- unknown words --
+
+/** The queue of words players tried that the dictionary does not have. */
+export const adminListUnknownWords = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      page: z.number().int().min(1).max(10_000).optional(),
+      pageSize: z.number().int().min(1).max(200).optional(),
+    }),
+  )
+  .handler(async ({ data }): Promise<UnknownWordsPage> => {
+    requireAdmin();
+    return listUnknownWords(data);
+  });
+
+/**
+ * Adds queued words to the dictionary. An empty `ids` means the whole queue.
+ */
+export const adminAddUnknownWords = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      ids: z.array(z.string().min(1)).max(2000),
+      dialect: z.boolean().optional(),
+    }),
+  )
+  .handler(async ({ data }): Promise<AddUnknownResult> => {
+    requireAdmin();
+    // An empty selection is read as "all of them", which is what the button means.
+    return addUnknownWords(data.ids.length === 0 ? null : data.ids, {
+      dialect: data.dialect,
+    });
+  });
+
+/** Drops queued words without adding them. An empty `ids` clears the queue. */
+export const adminForgetUnknownWords = createServerFn({ method: "POST" })
+  .validator(z.object({ ids: z.array(z.string().min(1)).max(2000) }))
+  .handler(async ({ data }): Promise<{ removed: number }> => {
+    requireAdmin();
+    return forgetUnknownWords(data.ids.length === 0 ? null : data.ids);
+  });
 
 // ----------------------------------------------------------------- days --
 

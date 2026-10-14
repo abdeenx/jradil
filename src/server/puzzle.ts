@@ -19,6 +19,7 @@ import { MAX_ATTEMPTS, WORD_LETTER_COUNT } from "#/lib/config.ts";
 import { optionalEnv } from "#/lib/env.ts";
 import { signProgress, verifyProgress } from "#/lib/progress.ts";
 import { dayEndUtc, dayStartUtc, isDateKey, sudanDateKey, type DateKey } from "#/lib/sudan-time.ts";
+import { recordUnknownWord } from "#/lib/unknown-words.ts";
 import { getGameSecret, getSettings, getWordByText, resolveDay, wordExists } from "#/lib/words.ts";
 
 /**
@@ -166,8 +167,15 @@ export const submitGuess = createServerFn({ method: "POST" })
       };
     }
 
-    if (settings.enforceDictionary && !(await wordExists(guess))) {
-      return { ok: false, reason: "not-a-word", message: "هذه الكلمة غير موجودة في القاموس" };
+    // One lookup serves two jobs: refusing a word the game does not know, and
+    // collecting the words it does not know so the operator can review them.
+    // Recorded whether or not enforcement is on, so the gap in the dictionary is
+    // visible either way.
+    if (!(await wordExists(guess))) {
+      await recordUnknownWord(guess);
+      if (settings.enforceDictionary) {
+        return { ok: false, reason: "not-a-word", message: "هذه الكلمة غير موجودة في القاموس" };
+      }
     }
 
     const answer = resolution.day.wordText;

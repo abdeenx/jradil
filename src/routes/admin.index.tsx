@@ -181,6 +181,18 @@ function DashboardPage() {
             <span className="text-base-content/50">
               منها {data.stats.dialectAvailable} غير مستخدمة بعد
             </span>
+            {data.unknownCount > 0 ? (
+              <>
+                {" · "}
+                <Link
+                  to="/admin/words"
+                  search={{ q: "", scope: "all", page: 1, queue: 1 }}
+                  className="link link-warning"
+                >
+                  {data.unknownCount} كلمة رفضها القاموس
+                </Link>
+              </>
+            ) : null}
           </p>
 
           <details className="collapse">
