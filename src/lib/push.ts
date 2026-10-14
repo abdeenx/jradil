@@ -17,7 +17,8 @@ import webpush from "web-push";
 import { ensureSchema } from "./db.ts";
 import { optionalEnv } from "./env.ts";
 import { SETTINGS_KEY, Settings, Subscription } from "./jradil-model.ts";
-import { reminderDue, reminderMessage } from "./reminder.ts";
+import { getSettings } from "./words.ts";
+import { formatReminderTime, reminderDue, reminderMessage } from "./reminder.ts";
 import { sudanDateKey } from "./sudan-time.ts";
 
 /** Consecutive failures before a subscription is treated as abandoned. */
@@ -107,6 +108,8 @@ export type ReminderRun = {
   /** How many endpoints turned out to be dead. */
   pruned: number;
   dateKey: string;
+  /** The Sudan-local time the reminder is set for, `15:00`. */
+  at: string;
 };
 
 /**
@@ -136,18 +139,24 @@ async function claimDay(dateKey: string): Promise<boolean> {
 export async function runReminder(now: Date = new Date()): Promise<ReminderRun> {
   const dateKey = sudanDateKey(now);
 
-  if (!reminderDue(now)) {
-    return { sent: false, reason: "not-due", delivered: 0, pruned: 0, dateKey };
+  await ensureSchema();
+
+  // Read every tick, so moving the time in the dashboard takes effect without a
+  // restart. The settings read is cached for a few seconds, so this is cheap.
+  const settings = await getSettings();
+  const at = formatReminderTime({ hour: settings.reminderHour, minute: settings.reminderMinute });
+
+  if (!reminderDue(now, { hour: settings.reminderHour, minute: settings.reminderMinute })) {
+    return { sent: false, reason: "not-due", delivered: 0, pruned: 0, dateKey, at };
   }
 
   const credentials = vapid();
   if (!credentials) {
-    return { sent: false, reason: "not-configured", delivered: 0, pruned: 0, dateKey };
+    return { sent: false, reason: "not-configured", delivered: 0, pruned: 0, dateKey, at };
   }
 
-  await ensureSchema();
   if (!(await claimDay(dateKey))) {
-    return { sent: false, reason: "already-sent", delivered: 0, pruned: 0, dateKey };
+    return { sent: false, reason: "already-sent", delivered: 0, pruned: 0, dateKey, at };
   }
 
   webpush.setVapidDetails(credentials.subject, credentials.publicKey, credentials.privateKey);
@@ -194,5 +203,5 @@ export async function runReminder(now: Date = new Date()): Promise<ReminderRun> 
     }),
   );
 
-  return { sent: true, reason: "sent", delivered, pruned, dateKey };
+  return { sent: true, reason: "sent", delivered, pruned, dateKey, at };
 }

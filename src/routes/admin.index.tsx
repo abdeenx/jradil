@@ -1,6 +1,7 @@
 import { Link, createFileRoute, useRouter, type SearchSchemaInput } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { ReminderSettings } from "#/components/admin/ReminderSettings.tsx";
 import { WordPicker } from "#/components/admin/WordPicker.tsx";
 import { pageParam } from "#/lib/search-params.ts";
 import { formatDateKey, shortDateKey } from "#/lib/sudan-time.ts";
@@ -237,6 +238,14 @@ function DashboardPage() {
 
       {/* ----------------------------------------------------------- recent -- */}
       <UsedWords />
+
+      <ReminderSettings
+        hour={data.settings.reminderHour}
+        minute={data.settings.reminderMinute}
+        subscribers={data.subscribers}
+        onSaved={() => void router.invalidate()}
+      />
+
       {notice ? (
         <div role="alert" className="alert alert-info alert-soft">
           <span>{notice}</span>

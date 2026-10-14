@@ -6,11 +6,13 @@ import { Confetti } from "#/components/Confetti.tsx";
 import { Countdown } from "#/components/Countdown.tsx";
 import { GameBoard } from "#/components/GameBoard.tsx";
 import { Keyboard } from "#/components/Keyboard.tsx";
-import { ReminderPrompt } from "#/components/ReminderPrompt.tsx";
+import { ReminderCard, ReminderDialog } from "#/components/ReminderPrompt.tsx";
 import { ResultDialog } from "#/components/ResultDialog.tsx";
 import { SiteHeader } from "#/components/SiteHeader.tsx";
 import { useDailyGame } from "#/hooks/useDailyGame.ts";
+import { useReminder } from "#/hooks/useReminder.ts";
 import { isBaseLetter, toLetters } from "#/lib/arabic.ts";
+import { shouldOfferReminder } from "#/lib/reminder.ts";
 import { APP_NAME_AR, NEXT_WORD_LABEL, TAGLINE_AR } from "#/lib/config.ts";
 import { socialMeta } from "#/lib/social.ts";
 import { shortDateKey } from "#/lib/sudan-time.ts";
@@ -34,6 +36,16 @@ function GamePage() {
   const puzzle = Route.useLoaderData();
   const router = useRouter();
   const game = useDailyGame(puzzle);
+  const reminder = useReminder();
+
+  // Offered once the game is over and the result panel has been dealt with —
+  // never on top of it.
+  const offerReminder = shouldOfferReminder({
+    available: reminder.state.kind === "ready",
+    dismissed: reminder.dismissed,
+    gameFinished: game.status !== "playing",
+    resultOpen: game.resultOpen,
+  });
 
   const handleElapsed = useCallback(() => {
     void router.invalidate();
@@ -129,7 +141,7 @@ function GamePage() {
             {/* Teaches the colours once, then gets out of the way. */}
             {game.rows.length === 0 ? <Legend /> : null}
 
-            <ReminderPrompt />
+            <ReminderCard reminder={reminder} />
           </div>
         ) : (
           <div className="mx-auto max-w-md">
@@ -146,6 +158,8 @@ function GamePage() {
           {APP_NAME_AR} — كلمة سودانية جديدة كل يوم، بتوقيت الخرطوم (UTC+2).
         </footer>
       </main>
+
+      <ReminderDialog reminder={reminder} open={offerReminder} />
 
       <ResultDialog
         open={game.resultOpen}

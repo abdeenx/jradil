@@ -117,19 +117,31 @@ The dictionary, which is loaded in bulk and then left alone.
 
 ## Daily reminder
 
-Players can ask to be reminded when the new word lands. The card sits below the
-board — never a modal, so it does not interrupt a game — and is only shown while
-the answer is still open:
+Players can ask to be reminded when the new word lands. Two surfaces offer the
+same switch, and the app picks the moment rather than leaving it to be stumbled
+upon:
 
-| State                       | What the player sees                                                                          |
-| --------------------------- | --------------------------------------------------------------------------------------------- |
-| Supported, not yet asked    | **ذكّرني بكلمة اليوم** with an enable button and a **لاحقًا** dismissal                          |
-| Subscribed                  | A line confirming it, with **إيقاف**                                                          |
-| Declined, or dismissed      | Nothing, until the dismissal lapses after a week                                              |
-| iOS, not installed          | A note to add the site to the home screen first — iOS only delivers push to an installed site |
-| No VAPID keys on the server | A note that reminders are not set up                                                          |
+**The prompt** is a dialog. It opens when a game ends and the result panel has
+been dealt with — the moment the offer means something, since the word being
+offered is tomorrow's. It will not open while a game is in progress, and never on
+top of the result panel: two dialogs in a row is a stack, not a prompt.
 
-**The reminder goes out at 15:00 Khartoum (13:00 UTC)**, for whoever subscribed.
+**The card** sits quietly below the board for anyone who waves the popup away, so
+dismissing it is never a dead end, and it is where the reminder is turned off
+again afterwards.
+
+| State                          | What the player sees                                                                          |
+| ------------------------------ | --------------------------------------------------------------------------------------------- |
+| Browser can ask, not yet asked | The dialog, and the card with an enable button                                                |
+| Subscribed                     | A confirmation line on the card, with **إيقاف**                                               |
+| Waved away                     | No dialog for a week; the card is still there to opt in                                       |
+| Permission refused             | Nothing — the browser will not ask again                                                      |
+| iOS, not installed             | A note to add the site to the home screen first — iOS only delivers push to an installed site |
+| No VAPID keys on the server    | A note that reminders are not set up                                                          |
+
+**The time is set from the dashboard**, under **التنبيه اليومي**, and applies
+within a minute — no redeploy. It defaults to 15:00 Khartoum, which is 13:00 UTC.
+
 Nothing is stored about who a subscriber is: a subscription is an endpoint and two
 keys, so there is no account and no personal data.
 
@@ -139,9 +151,10 @@ A ticker inside the server process asks once a minute whether the reminder is du
 and the claim is recorded in the database before anything is sent. Three
 consequences worth knowing:
 
-- **It self-heals.** The check is "is it past 15:00 and has today not been sent",
-  not "sleep until 15:00" — so a restart, a paused container or a clock change
-  still sends the day's reminder. A day nobody was up for is not back-filled.
+- **It self-heals.** The check is "is it past the configured time and has today
+  not been sent", not "sleep until the configured time" — so a restart, a paused
+  container or a clock change still sends the day's reminder. A day nobody was up
+  for is not back-filled.
 - **It cannot double-send.** The daily claim is a single conditional write, so two
   ticks — or two containers — cannot both decide to send.
 - **It needs no external scheduler.** The ticker starts on the first request the

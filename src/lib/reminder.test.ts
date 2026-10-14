@@ -2,6 +2,11 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { loadEnv } from "./env.ts";
 import {
+  DEFAULT_REMINDER_TIME,
+  shouldOfferReminder,
+  formatReminderTime,
+  normalizeReminderTime,
+  parseReminderTime,
   reminderClock,
   reminderDue,
   reminderInstant,
@@ -117,5 +122,113 @@ describe("the VAPID key the browser is given", () => {
     const bytes = new Uint8Array(vapidKeyBytes(configured));
     expect(bytes).toHaveLength(65);
     expect(bytes[0]).toBe(0x04);
+  });
+});
+
+describe("moving the send time", () => {
+  it("defaults to 15:00 Khartoum", () => {
+    expect(DEFAULT_REMINDER_TIME).toEqual({ hour: 15, minute: 0 });
+    // The default is what a deployment uses until the operator changes it.
+    expect(reminderDue(new Date("2026-10-14T12:59:00Z"))).toBe(false);
+    expect(reminderDue(new Date("2026-10-14T13:00:00Z"))).toBe(true);
+  });
+
+  it("honours a time the operator set", () => {
+    const morning = { hour: 9, minute: 30 };
+    expect(reminderDue(new Date("2026-10-14T07:29:00Z"), morning)).toBe(false);
+    expect(reminderDue(new Date("2026-10-14T07:30:00Z"), morning)).toBe(true);
+    expect(reminderInstant("2026-10-14", morning).toISOString()).toBe("2026-10-14T07:30:00.000Z");
+  });
+
+  it("handles midnight and the end of the day", () => {
+    // 00:00 Sudan: everyone is due the moment the new word lands.
+    expect(reminderDue(new Date("2026-10-14T22:00:00Z"), { hour: 0, minute: 0 })).toBe(true);
+    // 23:59 Sudan: due only in the last minute of the day.
+    expect(reminderDue(new Date("2026-10-14T20:00:00Z"), { hour: 23, minute: 59 })).toBe(false);
+    expect(reminderDue(new Date("2026-10-14T21:59:00Z"), { hour: 23, minute: 59 })).toBe(true);
+  });
+});
+
+describe("reading a time out of a settings document", () => {
+  it("keeps a valid pair", () => {
+    expect(normalizeReminderTime(9, 30)).toEqual({ hour: 9, minute: 30 });
+    expect(normalizeReminderTime(0, 0)).toEqual({ hour: 0, minute: 0 });
+    expect(normalizeReminderTime(23, 59)).toEqual({ hour: 23, minute: 59 });
+  });
+
+  it("falls back rather than sending at a nonsense hour", () => {
+    // A document written before the field existed, or hand-edited in Atlas.
+    expect(normalizeReminderTime(undefined, undefined)).toEqual(DEFAULT_REMINDER_TIME);
+    // `null` is the dangerous one: coercing it would mean midnight, not 15:00.
+    expect(normalizeReminderTime(null, null)).toEqual(DEFAULT_REMINDER_TIME);
+    expect(normalizeReminderTime("", "")).toEqual(DEFAULT_REMINDER_TIME);
+    expect(normalizeReminderTime(24, 0)).toEqual({ hour: 15, minute: 0 });
+    expect(normalizeReminderTime(-1, 0)).toEqual({ hour: 15, minute: 0 });
+    expect(normalizeReminderTime("9", 0)).toEqual({ hour: 15, minute: 0 });
+    expect(normalizeReminderTime(9, 60)).toEqual({ hour: 9, minute: 0 });
+    expect(normalizeReminderTime(9, "30")).toEqual({ hour: 9, minute: 0 });
+  });
+});
+
+describe("the time input's format", () => {
+  it("round-trips through a time input", () => {
+    for (const time of [
+      { hour: 0, minute: 0 },
+      { hour: 9, minute: 5 },
+      { hour: 15, minute: 0 },
+      { hour: 23, minute: 59 },
+    ]) {
+      expect(parseReminderTime(formatReminderTime(time))).toEqual(time);
+    }
+  });
+
+  it("always writes two digits, which is what the input requires", () => {
+    expect(formatReminderTime({ hour: 9, minute: 5 })).toBe("09:05");
+  });
+
+  it("rejects anything that is not a clock reading", () => {
+    expect(parseReminderTime("")).toBeNull();
+    expect(parseReminderTime("abc")).toBeNull();
+    expect(parseReminderTime("24:00")).toBeNull();
+    expect(parseReminderTime("12:60")).toBeNull();
+    expect(parseReminderTime("12")).toBeNull();
+  });
+});
+
+describe("when to interrupt with the popup", () => {
+  const ready = { available: true, dismissed: false, gameFinished: true, resultOpen: false };
+
+  it("asks once the game is over", () => {
+    expect(shouldOfferReminder(ready)).toBe(true);
+  });
+
+  it("never lands on top of the result panel", () => {
+    // Two dialogs in a row is a stack, not a prompt.
+    expect(shouldOfferReminder({ ...ready, resultOpen: true })).toBe(false);
+  });
+
+  it("does not interrupt a game in progress", () => {
+    expect(shouldOfferReminder({ ...ready, gameFinished: false })).toBe(false);
+  });
+
+  it("respects a dismissal", () => {
+    expect(shouldOfferReminder({ ...ready, dismissed: true })).toBe(false);
+  });
+
+  it("stays quiet when the browser cannot ask", () => {
+    // Already subscribed, unsupported, no VAPID keys, or permission denied.
+    expect(shouldOfferReminder({ ...ready, available: false })).toBe(false);
+  });
+
+  it("needs every condition, not just one", () => {
+    const combinations = [
+      { available: false, dismissed: false, gameFinished: true, resultOpen: false },
+      { available: true, dismissed: true, gameFinished: true, resultOpen: false },
+      { available: true, dismissed: false, gameFinished: false, resultOpen: false },
+      { available: true, dismissed: false, gameFinished: true, resultOpen: true },
+    ];
+    for (const combination of combinations) {
+      expect(shouldOfferReminder(combination)).toBe(false);
+    }
   });
 });

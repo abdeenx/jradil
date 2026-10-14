@@ -21,6 +21,7 @@
 import mongoose, { Schema } from "mongoose";
 
 import { COLLECTION_NAME, DEFAULT_POOL_SIZE, WORD_LETTER_COUNT } from "./config.ts";
+import { DEFAULT_REMINDER_TIME } from "./reminder.ts";
 
 /** Discriminator key. Named `kind` so raw documents read clearly in Atlas. */
 export const DOC_KIND_KEY = "kind";
@@ -121,6 +122,24 @@ const settingsSchema = new Schema({
    * and a restart after the send time can still send the day it missed.
    */
   lastReminderDateKey: { type: String, default: null },
+  /**
+   * Sudan-local time the daily reminder goes out. Editable from the dashboard,
+   * so the operator never has to redeploy to move it.
+   */
+  reminderHour: {
+    type: Number,
+    required: true,
+    default: DEFAULT_REMINDER_TIME.hour,
+    min: 0,
+    max: 23,
+  },
+  reminderMinute: {
+    type: Number,
+    required: true,
+    default: DEFAULT_REMINDER_TIME.minute,
+    min: 0,
+    max: 59,
+  },
 });
 
 settingsSchema.index(

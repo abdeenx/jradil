@@ -1,187 +1,56 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 
-import { vapidKeyBytes } from "#/lib/reminder.ts";
-import { getPushConfig, subscribeToReminders, unsubscribeFromReminders } from "#/server/push.ts";
+import type { Reminder, ReminderState } from "#/hooks/useReminder.ts";
 
 /**
- * Asks the player whether they want a daily nudge.
+ * Two ways the same switch is offered.
  *
- * Only offered when the browser can actually do it and has not already been
- * asked. `Notification.permission` is one shot per site, so once it is denied
- * there is nothing to ask again — and a player who said "later" is remembered, so
- * the card does not follow them around every visit.
+ * `ReminderDialog` is the prompt: a real `<dialog>` that interrupts, once the
+ * game is over and the result panel is out of the way. `ReminderCard` is the
+ * quiet path for anyone who waves the popup away, and the place to turn the
+ * reminder off again afterwards.
  *
- * Inline rather than a modal: it sits below the board and never interrupts a
- * game in progress.
+ * Both take the same `Reminder`, so there is one subscription state between them.
  */
-
-const DISMISS_KEY = "jradil:reminder-dismissed";
-const DISMISS_DAYS = 7;
-
-type State =
-  | { kind: "checking" }
-  /** Nothing to show: denied, dismissed, or already answered. */
-  | { kind: "hidden" }
-  | { kind: "unsupported" }
-  /** iOS only honours push once the site is installed to the home screen. */
-  | { kind: "needs-install" }
-  /** The deployment has no VAPID keys, so there is nothing to subscribe to. */
-  | { kind: "unavailable" }
-  | { kind: "ready" }
-  | { kind: "working" }
-  | { kind: "subscribed" }
-  | { kind: "error"; message: string };
 
 const EXPLANATION: Record<string, string> = {
   unsupported: "متصفحك لا يدعم التنبيهات.",
   "needs-install":
     "على الآيفون، أضف الموقع إلى الشاشة الرئيسية من زر المشاركة ثم افتحه من هناك لتفعيل التنبيه.",
   unavailable: "التنبيهات غير مهيّأة على هذا الموقع بعد.",
-  ready: "تنبيه واحد يوميًا عند الثالثة عصرًا بتوقيت السودان، حين تصدر كلمة اليوم الجديدة.",
+  ready: "تنبيه واحد يوميًا حين تصدر كلمة اليوم الجديدة، بتوقيت الخرطوم.",
 };
 
-function dismissedRecently(): boolean {
-  try {
-    const raw = window.localStorage.getItem(DISMISS_KEY);
-    if (!raw) return false;
-    return Date.now() - Number(raw) < DISMISS_DAYS * 24 * 60 * 60 * 1000;
-  } catch {
-    return false;
-  }
+function explanationFor(state: ReminderState): string {
+  return state.kind === "error"
+    ? EXPLANATION.ready
+    : (EXPLANATION[state.kind] ?? EXPLANATION.ready);
 }
 
-function rememberDismissal(): void {
-  try {
-    window.localStorage.setItem(DISMISS_KEY, String(Date.now()));
-  } catch {
-    // A blocked storage only means the card may come back next visit.
-  }
+/** The enable button, shared so the two surfaces cannot drift apart. */
+function EnableButton({ reminder, label }: { reminder: Reminder; label: string }) {
+  return (
+    <button
+      type="button"
+      className="btn btn-primary"
+      disabled={reminder.state.kind === "working"}
+      onClick={() => reminder.enable()}
+    >
+      {reminder.state.kind === "working" ? (
+        <span className="loading loading-spinner loading-sm" />
+      ) : null}
+      {label}
+    </button>
+  );
 }
 
-function canPush(): boolean {
-  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
-}
-
-/** iOS exposes the APIs but only delivers push to an installed site. */
-function isIOSWithoutInstall(): boolean {
-  const iOS = /iP(hone|ad|od)/.test(navigator.userAgent);
-  const installed =
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as unknown as { standalone?: boolean }).standalone === true;
-  return iOS && !installed;
-}
-
-export function ReminderPrompt() {
-  const [state, setState] = useState<State>({ kind: "checking" });
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function look() {
-      if (!canPush()) {
-        setState({ kind: isIOSWithoutInstall() ? "needs-install" : "unsupported" });
-        return;
-      }
-      if (Notification.permission === "denied" || dismissedRecently()) {
-        setState({ kind: "hidden" });
-        return;
-      }
-
-      const registration = await navigator.serviceWorker.register("/sw.js");
-      const existing = await registration.pushManager.getSubscription();
-      if (cancelled) return;
-
-      const { publicKey } = await getPushConfig();
-      if (cancelled) return;
-
-      if (!publicKey) {
-        setState({ kind: "unavailable" });
-        return;
-      }
-
-      if (existing) {
-        // Already subscribed here. Sending it again is a cheap upsert, and it
-        // repairs the server side if its copy was ever lost.
-        const json = existing.toJSON();
-        await subscribeToReminders({
-          data: {
-            endpoint: existing.endpoint,
-            keys: { p256dh: json.keys?.p256dh ?? "", auth: json.keys?.auth ?? "" },
-          },
-        }).catch(() => undefined);
-        if (!cancelled) setState({ kind: "subscribed" });
-        return;
-      }
-
-      setState({ kind: "ready" });
-    }
-
-    void look().catch(() => setState({ kind: "unavailable" }));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  async function enable() {
-    setState({ kind: "working" });
-    try {
-      if ((await Notification.requestPermission()) !== "granted") {
-        // The browser will not ask again, so there is nothing left to offer.
-        setState({ kind: "hidden" });
-        return;
-      }
-
-      const { publicKey } = await getPushConfig();
-      if (!publicKey) {
-        setState({ kind: "unavailable" });
-        return;
-      }
-
-      const registration = await navigator.serviceWorker.register("/sw.js");
-      const subscription = await registration.pushManager.subscribe({
-        // Required everywhere: a push must result in something visible.
-        userVisibleOnly: true,
-        applicationServerKey: vapidKeyBytes(publicKey),
-      });
-      const json = subscription.toJSON();
-
-      const result = await subscribeToReminders({
-        data: {
-          endpoint: subscription.endpoint,
-          keys: { p256dh: json.keys?.p256dh ?? "", auth: json.keys?.auth ?? "" },
-        },
-      });
-
-      setState(result.ok ? { kind: "subscribed" } : { kind: "error", message: result.reason });
-    } catch {
-      setState({ kind: "error", message: "تعذّر تفعيل التنبيه على هذا المتصفح." });
-    }
-  }
-
-  async function disable() {
-    setState({ kind: "working" });
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-      if (subscription) {
-        await unsubscribeFromReminders({ data: { endpoint: subscription.endpoint } });
-        await subscription.unsubscribe();
-      }
-      rememberDismissal();
-      setState({ kind: "hidden" });
-    } catch {
-      setState({ kind: "error", message: "تعذّر إيقاف التنبيه." });
-    }
-  }
-
-  function dismiss() {
-    rememberDismissal();
-    setState({ kind: "hidden" });
-  }
-
+/**
+ * The passive offer: always available while the reminder is still on the table,
+ * so dismissing the popup never leaves the player with no way back in.
+ */
+export function ReminderCard({ reminder }: { reminder: Reminder }) {
+  const { state } = reminder;
   if (state.kind === "checking" || state.kind === "hidden") return null;
-
-  const actionable = state.kind === "ready" || state.kind === "working" || state.kind === "error";
 
   return (
     <div className="mx-auto w-full max-w-sm">
@@ -190,7 +59,11 @@ export function ReminderPrompt() {
           {state.kind === "subscribed" ? (
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm">🔔 سيصلك تنبيه بكلمة اليوم كل يوم.</p>
-              <button type="button" className="btn btn-ghost btn-xs" onClick={() => void disable()}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs"
+                onClick={() => reminder.disable()}
+              >
                 إيقاف
               </button>
             </div>
@@ -198,11 +71,7 @@ export function ReminderPrompt() {
             <>
               <div>
                 <h2 className="font-bold">ذكّرني بكلمة اليوم</h2>
-                <p className="text-base-content/70 mt-1 text-sm">
-                  {state.kind === "error"
-                    ? EXPLANATION.ready
-                    : (EXPLANATION[state.kind] ?? EXPLANATION.ready)}
-                </p>
+                <p className="text-base-content/70 mt-1 text-sm">{explanationFor(state)}</p>
               </div>
 
               {state.kind === "error" ? (
@@ -211,22 +80,9 @@ export function ReminderPrompt() {
                 </div>
               ) : null}
 
-              {actionable ? (
+              {state.kind === "ready" || state.kind === "working" || state.kind === "error" ? (
                 <div className="card-actions">
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    disabled={state.kind === "working"}
-                    onClick={() => void enable()}
-                  >
-                    {state.kind === "working" ? (
-                      <span className="loading loading-spinner loading-sm" />
-                    ) : null}
-                    تفعيل التنبيه
-                  </button>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={dismiss}>
-                    لاحقًا
-                  </button>
+                  <EnableButton reminder={reminder} label="تفعيل التنبيه" />
                 </div>
               ) : null}
             </>
@@ -234,5 +90,85 @@ export function ReminderPrompt() {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * The prompt itself.
+ *
+ * `open` is the page's judgement that this is the moment — the dialog still
+ * declines unless the browser can genuinely be asked, so the caller does not
+ * have to know how the subscription works.
+ *
+ * Opens on a short delay rather than instantly: it is triggered by the result
+ * panel closing, and swapping one dialog for another in the same frame reads as
+ * a glitch rather than a prompt.
+ */
+export function ReminderDialog({ reminder, open }: { reminder: Reminder; open: boolean }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  const wantsToAsk = open && reminder.state.kind === "ready" && !reminder.dismissed;
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    if (!wantsToAsk) {
+      if (dialog.open) dialog.close();
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      if (!dialog.open) dialog.showModal();
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, [wantsToAsk]);
+
+  const { state } = reminder;
+  if (state.kind === "checking" || state.kind === "hidden" || state.kind === "subscribed") {
+    return null;
+  }
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="modal"
+      // Escape and the backdrop both mean "not now", which is a dismissal.
+      onClose={() => reminder.dismiss()}
+    >
+      <div className="modal-box text-center">
+        <p className="text-4xl" aria-hidden="true">
+          🔔
+        </p>
+        <h3 className="mt-2 text-xl font-bold">لا تفوّتك كلمة اليوم</h3>
+        <p className="text-base-content/70 mt-2 text-sm">
+          {state.kind === "ready" ? EXPLANATION.ready : explanationFor(state)}
+        </p>
+
+        {state.kind === "error" ? (
+          <div role="alert" className="alert alert-error alert-soft mt-3 py-2 text-xs">
+            <span>{state.message}</span>
+          </div>
+        ) : null}
+
+        <div className="modal-action flex-col-reverse gap-2 sm:flex-row">
+          {state.kind === "ready" || state.kind === "working" || state.kind === "error" ? (
+            <EnableButton reminder={reminder} label="نعم، ذكّرني" />
+          ) : null}
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => dialogRef.current?.close()}
+          >
+            لاحقًا
+          </button>
+        </div>
+      </div>
+
+      <form method="dialog" className="modal-backdrop">
+        <button>إغلاق</button>
+      </form>
+    </dialog>
   );
 }

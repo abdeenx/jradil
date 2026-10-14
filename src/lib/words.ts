@@ -29,6 +29,7 @@ import {
   type DayRevision,
   type DaySource,
 } from "./jradil-model.ts";
+import { normalizeReminderTime } from "./reminder.ts";
 import { sudanDateKey, type DateKey } from "./sudan-time.ts";
 import { normalizeExternalLink } from "./url.ts";
 
@@ -71,6 +72,9 @@ export type DayResolution =
 export type SettingsView = {
   poolSize: number;
   enforceDictionary: boolean;
+  /** Sudan-local time the daily reminder goes out. */
+  reminderHour: number;
+  reminderMinute: number;
 };
 
 export type PoolStatus = {
@@ -190,31 +194,56 @@ export async function getSettings(): Promise<SettingsView> {
   return value;
 }
 
+function toSettingsView(document: {
+  poolSize?: number | null;
+  enforceDictionary?: boolean | null;
+  reminderHour?: number | null;
+  reminderMinute?: number | null;
+}): SettingsView {
+  const reminder = normalizeReminderTime(document.reminderHour, document.reminderMinute);
+  return {
+    poolSize: document.poolSize ?? 30,
+    enforceDictionary: document.enforceDictionary ?? true,
+    reminderHour: reminder.hour,
+    reminderMinute: reminder.minute,
+  };
+}
+
 async function readSettings(): Promise<SettingsView> {
   await ensureSchema();
 
+  // The reminder time falls back rather than defaulting, because a settings
+  // document written before it existed has no value for it.
   const existing = await Settings.findOne({ key: SETTINGS_KEY }).lean();
-  if (existing) {
-    return { poolSize: existing.poolSize, enforceDictionary: existing.enforceDictionary };
-  }
+  if (existing) return toSettingsView(existing);
 
   try {
     const created = await Settings.create({ key: SETTINGS_KEY });
-    return { poolSize: created.poolSize, enforceDictionary: created.enforceDictionary };
+    return toSettingsView(created.toObject());
   } catch (error) {
     // A concurrent request created it first.
     if (!isDuplicateKeyError(error)) throw error;
     const raced = await Settings.findOne({ key: SETTINGS_KEY }).lean();
-    return { poolSize: raced?.poolSize ?? 30, enforceDictionary: raced?.enforceDictionary ?? true };
+    return toSettingsView(raced ?? {});
   }
 }
 
 export async function updateSettings(patch: Partial<SettingsView>): Promise<SettingsView> {
   await ensureSchema();
+  const current = await getSettings();
   const update: Record<string, unknown> = {};
   if (typeof patch.poolSize === "number") update.poolSize = Math.max(1, Math.floor(patch.poolSize));
   if (typeof patch.enforceDictionary === "boolean") {
     update.enforceDictionary = patch.enforceDictionary;
+  }
+  if (typeof patch.reminderHour === "number" || typeof patch.reminderMinute === "number") {
+    // Validated together, so a bad hour cannot pair with a good minute.
+    const reminder = normalizeReminderTime(
+      patch.reminderHour ?? current.reminderHour,
+      patch.reminderMinute ?? current.reminderMinute,
+    );
+    update.reminderHour = reminder.hour;
+    update.reminderMinute = reminder.minute;
   }
   if (Object.keys(update).length > 0) {
     await Settings.updateOne({ key: SETTINGS_KEY }, { $set: update }, { upsert: true });
