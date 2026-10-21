@@ -81,7 +81,14 @@ export type UnknownWordsPage = {
   pageSize: number;
 };
 
-/** The queue, most-tried first so the operator reviews the loudest ones first. */
+/**
+ * The queue, most recently tried first.
+ *
+ * Recency is the default because this is a queue to work through, not a
+ * leaderboard: the word a player reached for a minute ago is the one with
+ * someone still waiting on an answer, while a word from last month has already
+ * gone unanswered. Attempts break ties.
+ */
 export async function listUnknownWords(
   query: { page?: number; pageSize?: number } = {},
 ): Promise<UnknownWordsPage> {
@@ -91,7 +98,7 @@ export async function listUnknownWords(
 
   const [entries, total] = await Promise.all([
     Unknown.find({})
-      .sort({ count: -1, lastAt: 1 })
+      .sort({ lastAt: -1, count: -1 })
       .skip((page - 1) * pageSize)
       .limit(pageSize)
       .lean(),
@@ -111,9 +118,9 @@ export async function countUnknownWords(): Promise<number> {
   return Unknown.countDocuments({});
 }
 
-/** Every queued word, for the "add them all" path. */
+/** Every queued word, for the "add them all" path. Same order as the list. */
 async function allQueued(): Promise<UnknownLike[]> {
-  const entries = await Unknown.find({}).sort({ count: -1 }).lean();
+  const entries = await Unknown.find({}).sort({ lastAt: -1 }).lean();
   return entries as unknown as UnknownLike[];
 }
 

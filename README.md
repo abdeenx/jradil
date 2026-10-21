@@ -199,7 +199,7 @@ When a player types a word the game does not know, the guess is rejected — and
 recorded. Players are the best source of what the dictionary is missing, and they also
 mistype, so the result is a **review queue** rather than a list that only grows.
 
-`/admin/words` shows it at the top, most-tried first, with a count per word:
+`/admin/words` shows it at the top, most recently tried first, with a count per word:
 
 - **أضف** — adds that one word to the dictionary
 - **تجاهل** — drops it, for the mistypes

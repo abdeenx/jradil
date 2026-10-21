@@ -95,7 +95,7 @@ Still signed in, go to **`/admin/words`** and look at the top card.
 | --------------- | --------------------------------------------------------------------------- |
 | Row for `زقزقه` | present, with an attempt count of **3** — two spellings folded into one row |
 | Row for `بربشه` | present, count **1**                                                        |
-| Order           | most-attempted first, so `زقزقه` is above `بربشه`                           |
+| Order           | most recently tried first, so `بربشه` is above `زقزقه`                      |
 
 The count being 3 rather than two separate rows is the important part: the queue
 is keyed on the folded spelling, which is also what the game compares guesses
@@ -205,8 +205,8 @@ collection, and the queue is the documents tagged `kind: "unknown"`:
 // how many words are waiting
 db.jradil.countDocuments({ kind: "unknown" });
 
-// the queue, most-tried first
-db.jradil.find({ kind: "unknown" }).sort({ count: -1 }).limit(20);
+// the queue, most recently tried first — the order the dashboard shows
+db.jradil.find({ kind: "unknown" }).sort({ lastAt: -1 }).limit(20);
 
 // what keeps two spellings of a word from becoming two rows
 db.jradil.getIndexes().find((index) => index.name === "unknown_normalized_unique");

@@ -1,7 +1,7 @@
 import { useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { shortDateKey } from "#/lib/sudan-time.ts";
+import { formatSudan } from "#/lib/sudan-time.ts";
 import type { UnknownWordsPage } from "#/lib/unknown-words.ts";
 import { adminAddUnknownWords, adminForgetUnknownWords } from "#/server/admin.ts";
 
@@ -69,8 +69,8 @@ export function UnknownWordsPanel({
         </div>
 
         <p className="text-base-content/70 text-sm">
-          كلمات حاول اللاعبون استخدامها ولم توجد في القاموس. أضف ما تراه صحيحًا، وتجاهل ما كان خطأ
-          إملائيًا — فالقائمة لا تنقص إلا بما تُفرّغ به.
+          كلمات حاول اللاعبون استخدامها ولم توجد في القاموس، والأحدث محاولةً في الأعلى. أضف ما تراه
+          صحيحًا، وتجاهل ما كان خطأ إملائيًا — فالقائمة لا تنقص إلا بما تُفرّغ به.
         </p>
 
         {queue.total === 0 ? (
@@ -85,7 +85,16 @@ export function UnknownWordsPanel({
                   <tr>
                     <th>الكلمة</th>
                     <th>المحاولات</th>
-                    <th>آخر محاولة</th>
+                    <th>
+                      آخر محاولة
+                      <span
+                        className="text-base-content/40 ms-1"
+                        title="الأحدث أولًا"
+                        aria-hidden="true"
+                      >
+                        ↓
+                      </span>
+                    </th>
                     <th />
                   </tr>
                 </thead>
@@ -96,8 +105,11 @@ export function UnknownWordsPanel({
                       <td>
                         <span className="badge badge-ghost badge-sm">{entry.count}</span>
                       </td>
-                      <td className="text-base-content/60 text-xs">
-                        {shortDateKey(entry.lastAt.slice(0, 10))}
+                      <td className="text-base-content/60 text-xs whitespace-nowrap">
+                        {formatSudan(new Date(entry.lastAt), {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
                       </td>
                       <td className="whitespace-nowrap">
                         <button

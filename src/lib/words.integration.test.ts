@@ -494,11 +494,19 @@ describe.skipIf(!connectionString)("words against a live MongoDB", () => {
       expect(rows).toHaveLength(1);
     });
 
-    it("shows the most-tried words first", async () => {
-      await recordUnknownWord("نمنمه");
+    it("shows the most recently tried word first", async () => {
+      // The older word is tried more often; recency still decides the order,
+      // because a word someone tried a moment ago is the one still waiting.
+      await recordUnknownWord("شلشله");
+      await recordUnknownWord("شلشله");
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      await recordUnknownWord("شلشلا");
+
       const queue = await listUnknownWords({ pageSize: 50 });
-      const counts = queue.items.map((item) => item.count);
-      expect([...counts].sort((a, b) => b - a)).toEqual(counts);
+      expect(queue.items[0]?.text).toBe("شلشلا");
+
+      const times = queue.items.map((item) => Date.parse(item.lastAt));
+      expect([...times].sort((a, b) => b - a)).toEqual(times);
     });
 
     it("adds one word to the dictionary and clears it from the queue", async () => {

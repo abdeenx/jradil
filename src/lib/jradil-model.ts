@@ -208,8 +208,8 @@ unknownSchema.index(
   { normalized: 1 },
   { name: "unknown_normalized_unique", unique: true, partialFilterExpression: { kind: "unknown" } },
 );
-// The queue is shown most-tried first, and cleared wholesale when reviewed.
-unknownSchema.index({ count: -1 }, { name: "unknown_count" });
+// The queue is read most recently tried first, and cleared wholesale when reviewed.
+unknownSchema.index({ lastAt: -1 }, { name: "unknown_last_at" });
 
 /**
  * A browser that asked for the daily notification.
