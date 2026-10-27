@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { UnknownWordsPanel } from "#/components/admin/UnknownWordsPanel.tsx";
 import { WordEditDialog } from "#/components/admin/WordEditDialog.tsx";
 import { WORD_LETTER_COUNT } from "#/lib/config.ts";
-import { UNKNOWN_WORD_SORTS } from "#/lib/unknown-words.ts";
+import { UNKNOWN_WORD_SORTS } from "#/lib/unknown-words-sort.ts";
 import { enumParam, pageParam, textParam } from "#/lib/search-params.ts";
 import { isSafeExternalLink } from "#/lib/url.ts";
 import type { ImportSummary } from "#/lib/word-import.ts";

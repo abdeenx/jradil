@@ -13,6 +13,7 @@
 import { normalizeArabic } from "./arabic.ts";
 import { ensureSchema } from "./db.ts";
 import { Unknown, Word } from "./jradil-model.ts";
+import type { UnknownWordsSort } from "./unknown-words-sort.ts";
 
 export type UnknownWord = {
   id: string;
@@ -84,14 +85,9 @@ export type UnknownWordsPage = {
 /**
  * How the queue is ordered.
  *
- * `recent` is the working order: the word a player reached for a minute ago is
- * the one with someone still waiting. `tries` is the dictionary-gap order: a
- * word many people tried is more likely a real word than a typo, which is what
- * matters when the operator is choosing what to add rather than what to answer.
+ * The names live in `unknown-words-sort.ts` so the client can use them without
+ * importing the database; this module only maps them to Mongo sort specs.
  */
-export const UNKNOWN_WORD_SORTS = ["recent", "tries"] as const;
-export type UnknownWordsSort = (typeof UNKNOWN_WORD_SORTS)[number];
-
 const SORT_ORDERS: Record<UnknownWordsSort, Record<string, 1 | -1>> = {
   recent: { lastAt: -1, count: -1 },
   tries: { count: -1, lastAt: -1 },

@@ -46,10 +46,10 @@ import {
   countUnknownWords,
   forgetUnknownWords,
   listUnknownWords,
-  UNKNOWN_WORD_SORTS,
   type AddUnknownResult,
   type UnknownWordsPage,
 } from "#/lib/unknown-words.ts";
+import { UNKNOWN_WORD_SORTS } from "#/lib/unknown-words-sort.ts";
 import { importWords, type ImportSummary } from "#/lib/word-import.ts";
 import {
   bulkUpdateWords,

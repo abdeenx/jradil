@@ -2,7 +2,8 @@ import { useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { formatSudan } from "#/lib/sudan-time.ts";
-import type { UnknownWordsPage, UnknownWordsSort } from "#/lib/unknown-words.ts";
+import type { UnknownWordsPage } from "#/lib/unknown-words.ts";
+import type { UnknownWordsSort } from "#/lib/unknown-words-sort.ts";
 import { adminAddUnknownWords, adminForgetUnknownWords } from "#/server/admin.ts";
 
 /**
