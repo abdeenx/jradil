@@ -1,8 +1,8 @@
 import { useRouter } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { formatSudan } from "#/lib/sudan-time.ts";
-import type { UnknownWordsPage } from "#/lib/unknown-words.ts";
+import type { UnknownWordsPage, UnknownWordsSort } from "#/lib/unknown-words.ts";
 import { adminAddUnknownWords, adminForgetUnknownWords } from "#/server/admin.ts";
 
 /**
@@ -19,24 +19,35 @@ import { adminAddUnknownWords, adminForgetUnknownWords } from "#/server/admin.ts
 export function UnknownWordsPanel({
   queue,
   page,
+  sort,
   onPageChange,
+  onSortChange,
 }: {
   queue: UnknownWordsPage;
   page: number;
+  sort: UnknownWordsSort;
   onPageChange: (page: number) => void;
+  onSortChange: (sort: UnknownWordsSort) => void;
 }) {
   const router = useRouter();
   const [dialect, setDialect] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const pageCount = Math.max(1, Math.ceil(queue.total / queue.pageSize));
+  const allSelected = queue.items.length > 0 && selected.length === queue.items.length;
+
+  // A new page or order invalidates whatever was ticked on the old one.
+  useEffect(() => setSelected([]), [page, sort]);
 
   async function run(action: () => Promise<string>) {
     setBusy(true);
     setNotice(null);
     try {
       setNotice(await action());
+      // Whatever was ticked has just been added or forgotten.
+      setSelected([]);
       await router.invalidate();
     } catch {
       setNotice("تعذّر تنفيذ العملية. تحقق من الاتصال بقاعدة البيانات.");
@@ -45,7 +56,14 @@ export function UnknownWordsPanel({
     }
   }
 
+  function toggle(id: string, checked: boolean) {
+    setSelected((previous) =>
+      checked ? [...previous, id] : previous.filter((value) => value !== id),
+    );
+  }
+
   const addLabels = dialect ? "أضف الكل ككلمات سودانية" : "أضف الكل إلى القاموس";
+  const addSelectedLabels = dialect ? "أضف المحددة كسودانية" : "أضف المحددة";
 
   return (
     <section className="card bg-base-100 border-base-300 border">
@@ -69,8 +87,9 @@ export function UnknownWordsPanel({
         </div>
 
         <p className="text-base-content/70 text-sm">
-          كلمات حاول اللاعبون استخدامها ولم توجد في القاموس، والأحدث محاولةً في الأعلى. أضف ما تراه
-          صحيحًا، وتجاهل ما كان خطأ إملائيًا — فالقائمة لا تنقص إلا بما تُفرّغ به.
+          كلمات حاول اللاعبون استخدامها ولم توجد في القاموس. أضف ما تراه صحيحًا، وتجاهل ما كان خطأ
+          إملائيًا — فالقائمة لا تنقص إلا بما تُفرّغ به. اضغط على عنوان العمود لترتيب القائمة، وحدّد عدة
+          كلمات لمعالجتها دفعة واحدة.
         </p>
 
         {queue.total === 0 ? (
@@ -79,21 +98,85 @@ export function UnknownWordsPanel({
           </p>
         ) : (
           <>
+            <div className="border-base-300 bg-base-200 flex flex-wrap items-center gap-2 rounded-box border p-2">
+              <span className="text-base-content/60 text-sm">
+                {selected.length > 0
+                  ? `${selected.length} محددة`
+                  : "حدّد كلمات لمعالجتها دفعة واحدة"}
+              </span>
+              <div className="join">
+                <button
+                  type="button"
+                  className="btn join-item btn-sm"
+                  disabled={busy || selected.length === 0}
+                  onClick={() =>
+                    void run(async () => {
+                      const result = await adminAddUnknownWords({
+                        data: { ids: selected, dialect },
+                      });
+                      return `${result.added} كلمة أُضيفت، و${result.alreadyKnown} كانت موجودة أصلًا.`;
+                    })
+                  }
+                >
+                  {addSelectedLabels}
+                </button>
+                <button
+                  type="button"
+                  className="btn join-item btn-ghost btn-sm text-error"
+                  disabled={busy || selected.length === 0}
+                  onClick={() =>
+                    void run(async () => {
+                      const result = await adminForgetUnknownWords({ data: { ids: selected } });
+                      return `تُجوهلت ${result.removed} كلمة.`;
+                    })
+                  }
+                >
+                  تجاهل المحددة
+                </button>
+              </div>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="table table-sm">
                 <thead>
                   <tr>
+                    <th className="w-10">
+                      <input
+                        type="checkbox"
+                        className="checkbox checkbox-sm"
+                        checked={allSelected}
+                        aria-label="تحديد الكل"
+                        onChange={(event) =>
+                          setSelected(
+                            event.target.checked ? queue.items.map((item) => item.id) : [],
+                          )
+                        }
+                      />
+                    </th>
                     <th>الكلمة</th>
-                    <th>المحاولات</th>
                     <th>
-                      آخر محاولة
-                      <span
-                        className="text-base-content/40 ms-1"
-                        title="الأحدث أولًا"
-                        aria-hidden="true"
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs gap-1 px-1"
+                        aria-pressed={sort === "tries"}
+                        title="الأكثر محاولة أولًا"
+                        onClick={() => onSortChange("tries")}
                       >
-                        ↓
-                      </span>
+                        المحاولات
+                        {sort === "tries" ? <span aria-hidden="true">↓</span> : null}
+                      </button>
+                    </th>
+                    <th>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs gap-1 px-1"
+                        aria-pressed={sort === "recent"}
+                        title="الأحدث محاولةً أولًا"
+                        onClick={() => onSortChange("recent")}
+                      >
+                        آخر محاولة
+                        {sort === "recent" ? <span aria-hidden="true">↓</span> : null}
+                      </button>
                     </th>
                     <th />
                   </tr>
@@ -101,6 +184,15 @@ export function UnknownWordsPanel({
                 <tbody>
                   {queue.items.map((entry) => (
                     <tr key={entry.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          className="checkbox checkbox-sm"
+                          checked={selected.includes(entry.id)}
+                          aria-label={`تحديد ${entry.text}`}
+                          onChange={(event) => toggle(entry.id, event.target.checked)}
+                        />
+                      </td>
                       <td className="text-lg font-bold tracking-widest">{entry.text}</td>
                       <td>
                         <span className="badge badge-ghost badge-sm">{entry.count}</span>

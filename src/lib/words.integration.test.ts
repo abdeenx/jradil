@@ -509,6 +509,15 @@ describe.skipIf(!connectionString)("words against a live MongoDB", () => {
       expect([...times].sort((a, b) => b - a)).toEqual(times);
     });
 
+    it("orders by attempts when asked, however old the word is", async () => {
+      // زقزقه was tried most but earliest; attempts order puts it first anyway.
+      const queue = await listUnknownWords({ pageSize: 50, sort: "tries" });
+      expect(queue.items[0]?.text).toBe("زقزقه");
+
+      const counts = queue.items.map((item) => item.count);
+      expect([...counts].sort((a, b) => b - a)).toEqual(counts);
+    });
+
     it("adds one word to the dictionary and clears it from the queue", async () => {
       const before = await countUnknownWords();
       const queue = await listUnknownWords({ pageSize: 50 });

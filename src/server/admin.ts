@@ -46,6 +46,7 @@ import {
   countUnknownWords,
   forgetUnknownWords,
   listUnknownWords,
+  UNKNOWN_WORD_SORTS,
   type AddUnknownResult,
   type UnknownWordsPage,
 } from "#/lib/unknown-words.ts";
@@ -282,6 +283,7 @@ export const adminListUnknownWords = createServerFn({ method: "POST" })
     z.object({
       page: z.number().int().min(1).max(10_000).optional(),
       pageSize: z.number().int().min(1).max(200).optional(),
+      sort: z.enum(UNKNOWN_WORD_SORTS).optional(),
     }),
   )
   .handler(async ({ data }): Promise<UnknownWordsPage> => {

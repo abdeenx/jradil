@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { UnknownWordsPanel } from "#/components/admin/UnknownWordsPanel.tsx";
 import { WordEditDialog } from "#/components/admin/WordEditDialog.tsx";
 import { WORD_LETTER_COUNT } from "#/lib/config.ts";
+import { UNKNOWN_WORD_SORTS } from "#/lib/unknown-words.ts";
 import { enumParam, pageParam, textParam } from "#/lib/search-params.ts";
 import { isSafeExternalLink } from "#/lib/url.ts";
 import type { ImportSummary } from "#/lib/word-import.ts";
@@ -32,7 +33,13 @@ const SCOPE_LABELS: Record<Scope, string> = {
 
 export const Route = createFileRoute("/admin/words")({
   validateSearch: (
-    search: { q?: unknown; scope?: unknown; page?: unknown; queue?: unknown } & SearchSchemaInput,
+    search: {
+      q?: unknown;
+      scope?: unknown;
+      page?: unknown;
+      queue?: unknown;
+      queueSort?: unknown;
+    } & SearchSchemaInput,
   ) => ({
     // The server refuses a longer search term.
     q: textParam(search.q, 200),
@@ -41,6 +48,8 @@ export const Route = createFileRoute("/admin/words")({
     // The review queue pages separately: emptying it is a different job from
     // browsing the dictionary.
     queue: pageParam(search.queue),
+    // Recency is the working order; attempts lead with what players reached for.
+    queueSort: enumParam(search.queueSort, UNKNOWN_WORD_SORTS, "recent"),
   }),
   loaderDeps: ({ search }) => search,
   loader: async ({ deps }) => {
@@ -60,7 +69,7 @@ export const Route = createFileRoute("/admin/words")({
         data: { ...filter, search: deps.q || undefined, page: deps.page, pageSize: 50 },
       }),
       adminGetSettings(),
-      adminListUnknownWords({ data: { page: deps.queue, pageSize: 30 } }),
+      adminListUnknownWords({ data: { page: deps.queue, pageSize: 30, sort: deps.queueSort } }),
     ]);
     return { words, settings, unknown };
   },
@@ -110,7 +119,9 @@ function WordsPage() {
       <UnknownWordsPanel
         queue={unknown}
         page={search.queue}
+        sort={search.queueSort}
         onPageChange={(next) => void navigate({ search: { ...search, queue: next } })}
+        onSortChange={(next) => void navigate({ search: { ...search, queue: 1, queueSort: next } })}
       />
 
       <ImportPanel onDone={() => void router.invalidate()} />

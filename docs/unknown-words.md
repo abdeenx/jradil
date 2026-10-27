@@ -97,6 +97,11 @@ Still signed in, go to **`/admin/words`** and look at the top card.
 | Row for `بربشه` | present, count **1**                                                        |
 | Order           | most recently tried first, so `بربشه` is above `زقزقه`                      |
 
+Click **المحاولات** in the table header to sort by attempt count instead, so
+the words most players reached for come first however old they are. Click
+**آخر محاولة** to go back to recency. The choice stays in the URL, so it
+survives a refresh.
+
 The count being 3 rather than two separate rows is the important part: the queue
 is keyed on the folded spelling, which is also what the game compares guesses
 with.
@@ -108,6 +113,16 @@ with.
 
 Expected: a confirmation that it was added, and **that row disappears**. The
 other row stays.
+
+### Add or ignore several at once
+
+1. Tick the checkboxes beside two or more rows, or the header checkbox to take
+   the whole page.
+2. Press **أضف المحددة** to add them, or **تجاهل المحددة** to drop them all.
+
+Expected: one summary for the whole batch, and the ticked rows disappear. The
+selection is per page and clears when you page or change the order, so nothing
+silently carries over.
 
 ### Add everything
 

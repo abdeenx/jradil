@@ -82,15 +82,36 @@ export type UnknownWordsPage = {
 };
 
 /**
- * The queue, most recently tried first.
+ * How the queue is ordered.
+ *
+ * `recent` is the working order: the word a player reached for a minute ago is
+ * the one with someone still waiting. `tries` is the dictionary-gap order: a
+ * word many people tried is more likely a real word than a typo, which is what
+ * matters when the operator is choosing what to add rather than what to answer.
+ */
+export const UNKNOWN_WORD_SORTS = ["recent", "tries"] as const;
+export type UnknownWordsSort = (typeof UNKNOWN_WORD_SORTS)[number];
+
+const SORT_ORDERS: Record<UnknownWordsSort, Record<string, 1 | -1>> = {
+  recent: { lastAt: -1, count: -1 },
+  tries: { count: -1, lastAt: -1 },
+};
+
+function sortOrder(sort: UnknownWordsSort | undefined): Record<string, 1 | -1> {
+  return SORT_ORDERS[sort ?? "recent"] ?? SORT_ORDERS.recent;
+}
+
+/**
+ * A page of the queue, most recently tried first unless asked otherwise.
  *
  * Recency is the default because this is a queue to work through, not a
  * leaderboard: the word a player reached for a minute ago is the one with
  * someone still waiting on an answer, while a word from last month has already
- * gone unanswered. Attempts break ties.
+ * gone unanswered. Attempts break ties. Ordering by attempts inverts the two,
+ * so the words most players reached for come first however old they are.
  */
 export async function listUnknownWords(
-  query: { page?: number; pageSize?: number } = {},
+  query: { page?: number; pageSize?: number; sort?: UnknownWordsSort } = {},
 ): Promise<UnknownWordsPage> {
   await ensureSchema();
   const page = Math.max(1, Math.floor(query.page ?? 1));
@@ -98,7 +119,7 @@ export async function listUnknownWords(
 
   const [entries, total] = await Promise.all([
     Unknown.find({})
-      .sort({ lastAt: -1, count: -1 })
+      .sort(sortOrder(query.sort))
       .skip((page - 1) * pageSize)
       .limit(pageSize)
       .lean(),
@@ -120,7 +141,7 @@ export async function countUnknownWords(): Promise<number> {
 
 /** Every queued word, for the "add them all" path. Same order as the list. */
 async function allQueued(): Promise<UnknownLike[]> {
-  const entries = await Unknown.find({}).sort({ lastAt: -1 }).lean();
+  const entries = await Unknown.find({}).sort(sortOrder("recent")).lean();
   return entries as unknown as UnknownLike[];
 }
 
