@@ -39,7 +39,7 @@ describe("KEYPAD_ROWS", () => {
     expect(KEYPAD_ROWS).toEqual([
       ["ض", "ص", "ث", "ق", "ف", "غ", "ع", "ه", "خ", "ح", "ج"],
       ["ش", "س", "ي", "ب", "ل", "ا", "ت", "ن", "م", "ك", "ط"],
-      ["ذ", "ء", "ؤ", "ر", "ى", "ة", "و", "ز", "ظ", "د"],
+      ["ذ", "ر", "ة", "و", "ز", "ظ", "د"],
     ]);
   });
 
@@ -50,11 +50,16 @@ describe("KEYPAD_ROWS", () => {
     expect(new Set(base)).toEqual(BASE_LETTER_SET);
   });
 
-  it("makes every key playable, folding the extra spellings", () => {
+  it("makes every key playable, folding the extra spelling", () => {
     const keys = KEYPAD_ROWS.flat();
 
     expect(keys.every(isTypableLetter)).toBe(true);
-    expect(keys.filter((letter) => !isBaseLetter(letter))).toEqual(["ء", "ؤ", "ى", "ة"]);
+    expect(keys.filter((letter) => !isBaseLetter(letter))).toEqual(["ة"]);
+  });
+
+  it("refuses the spellings left off the keypad, even from a physical keyboard", () => {
+    expect(["ء", "ؤ", "ى"].filter(isTypableLetter)).toEqual([]);
+    expect(["أ", "إ", "آ", "ئ"].every(isTypableLetter)).toBe(true);
   });
 });
 

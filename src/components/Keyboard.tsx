@@ -12,10 +12,10 @@ const COLUMNS = Math.max(...KEYPAD_ROWS.map((row) => row.length));
  * best-known state improves — the CSS in `styles.css` delays those
  * transitions so the keys follow the board's reveal rather than race it.
  *
- * Rows follow Gboard's Arabic layout exactly as it sits on the phone: laid out
- * left to right with `ض` in the top-left corner, and backspace closing the last
- * letter row on the right. Keys like `ة` and `ء` are typed as shown and folded
- * by the game, so each one shares the state of the letter it folds onto.
+ * Rows follow Gboard's Arabic layout, minus its `ء ؤ ى` keys: laid out left to
+ * right as on the phone with `ض` in the top-left corner, and backspace closing
+ * the last letter row on the right. `ة` is typed as shown and folded by the game, so it
+ * shares the state of `ه`.
  */
 export function Keyboard({
   keyStates,

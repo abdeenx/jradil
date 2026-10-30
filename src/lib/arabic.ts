@@ -57,14 +57,15 @@ const BASE_LETTER_SET: ReadonlySet<string> = new Set(BASE_LETTERS);
  * players already type on. Rows are listed left to right as they appear on the
  * phone, `ض` in the top-left corner.
  *
- * Every key is playable. The 28 base letters are here, plus `ء ؤ ى ة`, which
- * are typed as shown and folded by the game before comparing, so typing
- * `مدرسة` or `مدرسه` is the same guess.
+ * Every key is playable. The 28 base letters are here, plus `ة`, which is
+ * typed as shown and folded by the game before comparing, so typing `مدرسة` or
+ * `مدرسه` is the same guess. Gboard's `ء ؤ ى` keys are left out, and those
+ * spellings are refused from a physical keyboard too.
  */
 export const KEYPAD_ROWS: readonly (readonly string[])[] = [
   ["ض", "ص", "ث", "ق", "ف", "غ", "ع", "ه", "خ", "ح", "ج"],
   ["ش", "س", "ي", "ب", "ل", "ا", "ت", "ن", "م", "ك", "ط"],
-  ["ذ", "ء", "ؤ", "ر", "ى", "ة", "و", "ز", "ظ", "د"],
+  ["ذ", "ر", "ة", "و", "ز", "ظ", "د"],
 ];
 
 /** Marks that carry no letter of their own and are dropped before comparing. */
@@ -150,9 +151,16 @@ export function isBaseLetter(character: string): boolean {
   return BASE_LETTER_SET.has(character);
 }
 
+/**
+ * Spellings the game still folds but will not take from the player: Gboard's
+ * `ء ؤ ى` keys are off the keypad, and a physical keyboard is held to the same
+ * rule.
+ */
+const REFUSED_LETTERS: ReadonlySet<string> = new Set(["ء", "ؤ", "ى"]);
+
 /** True for a single character a player may type: a base letter or a spelling of one. */
 export function isTypableLetter(character: string): boolean {
-  return isBaseLetter(foldLetter(character));
+  return !REFUSED_LETTERS.has(character) && isBaseLetter(foldLetter(character));
 }
 
 /** True when the text is a well-formed guess: five Arabic letters, nothing else. */

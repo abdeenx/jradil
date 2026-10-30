@@ -107,10 +107,31 @@ export function ResultDialog({
               href={link}
               target="_blank"
               rel="noopener noreferrer nofollow"
-              className="btn btn-ghost btn-sm mt-3 gap-1"
+              aria-label="اقرأ معناها في قاموس اللهجة السودانية (يفتح في نافذة جديدة)"
+              className="dictionary-link btn btn-secondary mt-4 h-auto w-full justify-between gap-3 py-3 text-start"
             >
-              اقرأ معناها في قاموس اللهجة السودانية
-              <span aria-hidden="true">↗</span>
+              <span className="flex items-center gap-3">
+                <svg
+                  className="h-6 w-6 shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 6.5C10.3 5.2 7.9 4.6 4 4.6v13.2c3.9 0 6.3.6 8 1.9 1.7-1.3 4.1-1.9 8-1.9V4.6c-3.9 0-6.3.6-8 1.9z" />
+                  <path d="M12 6.5v13.2" />
+                </svg>
+                <span className="flex flex-col items-start gap-0.5 leading-tight">
+                  <span className="text-base font-bold">اقرأ معناها</span>
+                  <span className="text-xs font-normal">في قاموس اللهجة السودانية</span>
+                </span>
+              </span>
+              <span aria-hidden="true" className="dictionary-link-arrow text-lg">
+                ↗
+              </span>
             </a>
           ) : null}
         </div>

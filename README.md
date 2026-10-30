@@ -357,9 +357,10 @@ answer.
 
 The on-screen keypad follows Gboard's Arabic layout, left to right as on the
 phone — `ض…ج`, `ش…ط`, `ذ…د` — with backspace closing the last letter row.
-Every key is playable: `ء ؤ ى ة` (and any other foldable spelling typed on a
-physical keyboard) are shown as typed and folded when scoring, so a key like
-`ة` takes the colour of `ه`. A bare `ء` folds onto `ا`.
+Gboard's `ء ؤ ى` keys are left out, and a physical keyboard refuses them too.
+Every key is playable: `ة` (and the other foldable spellings, such as `أ`, typed
+on a physical keyboard) is shown as typed and folded when scoring, so the `ة`
+key takes the colour of `ه`. A bare `ء` in a stored word folds onto `ا`.
 
 ## Deployment
 
