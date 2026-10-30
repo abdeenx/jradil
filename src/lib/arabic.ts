@@ -52,13 +52,19 @@ export const BASE_LETTERS = [
 const BASE_LETTER_SET: ReadonlySet<string> = new Set(BASE_LETTERS);
 
 /**
- * On-screen keypad, laid out like the familiar Arabic keyboard rows but
- * restricted to the 28 base letters so every key can appear in a word.
+ * On-screen keypad, laid out like the Arabic (101) keyboard Windows ships,
+ * mirrored so the first key sits on the right where an Arabic reader starts.
+ *
+ * All 28 base letters are here. Six keys from the Windows layout (`ئ ء ؤ لا ى
+ * ة`) are shown but disabled: the game folds every guess onto base letters, and
+ * `لا` is two letters, so none of them can stand on a tile of their own. `ذ`
+ * opens the first row because on a PC it lives on the key above that row, and
+ * this keypad has no number row to put it on.
  */
 export const KEYPAD_ROWS: readonly (readonly string[])[] = [
-  ["ض", "ص", "ث", "ق", "ف", "غ", "ع", "ه", "خ", "ح"],
-  ["ج", "د", "ش", "س", "ي", "ب", "ل", "ا", "ت"],
-  ["ن", "م", "ك", "ط", "ذ", "ر", "ز", "و", "ظ"],
+  ["ذ", "ض", "ص", "ث", "ق", "ف", "غ", "ع", "ه", "خ", "ح", "ج", "د"],
+  ["ش", "س", "ي", "ب", "ل", "ا", "ت", "ن", "م", "ك", "ط"],
+  ["ئ", "ء", "ؤ", "ر", "لا", "ى", "ة", "و", "ز", "ظ"],
 ];
 
 /** Marks that carry no letter of their own and are dropped before comparing. */

@@ -355,9 +355,12 @@ the stored word has `أ` counts as correct. Letter marking runs on the folded
 letters, so a repeated letter is only marked as often as it truly occurs in the
 answer.
 
-The tiles and the on-screen keypad show only the 28 base letters, which is why
-the keypad has three rows of ten, nine and nine rather than the full Arabic
-keyboard.
+The tiles show only the 28 base letters. The on-screen keypad follows the
+letter rows of the Windows Arabic (101) layout — `ض…د`, `ش…ط`, `ئ…ظ` — mirrored
+so the first key is on the right. The six Windows keys that are not playable
+here (`ئ ء ؤ لا ى ة`) are shown faded and disabled, so the layout reads right
+while only the 28 base letters can be pressed. `ذ`, which a PC puts on the key
+above the first row, opens that row instead.
 
 ## Deployment
 

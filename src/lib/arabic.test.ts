@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { isPlayableWord, normalizeArabic, scoreGuess, toLetters } from "./arabic.ts";
+import {
+  BASE_LETTERS,
+  isBaseLetter,
+  isPlayableWord,
+  KEYPAD_ROWS,
+  normalizeArabic,
+  scoreGuess,
+  toLetters,
+} from "./arabic.ts";
+
+const BASE_LETTER_SET = new Set(BASE_LETTERS);
 
 describe("normalizeArabic", () => {
   it("folds the alef, hamza and taa marbuta spellings a reader treats as the same", () => {
@@ -18,6 +28,25 @@ describe("normalizeArabic", () => {
     expect(normalizeArabic("مَدْرَسَة")).toBe("مدرسه");
     expect(normalizeArabic("مـدـرسـة")).toBe("مدرسه");
     expect(normalizeArabic("مدرسه\u200f")).toBe("مدرسه");
+  });
+});
+
+describe("KEYPAD_ROWS", () => {
+  it("follows the Windows Arabic (101) letter rows, mirrored for RTL", () => {
+    expect(KEYPAD_ROWS).toEqual([
+      ["ذ", "ض", "ص", "ث", "ق", "ف", "غ", "ع", "ه", "خ", "ح", "ج", "د"],
+      ["ش", "س", "ي", "ب", "ل", "ا", "ت", "ن", "م", "ك", "ط"],
+      ["ئ", "ء", "ؤ", "ر", "لا", "ى", "ة", "و", "ز", "ظ"],
+    ]);
+  });
+
+  it("keeps every base letter exactly once and marks the rest unplayable", () => {
+    const keys = KEYPAD_ROWS.flat();
+    const playable = keys.filter(isBaseLetter);
+
+    expect(playable).toHaveLength(BASE_LETTERS.length);
+    expect(new Set(playable)).toEqual(BASE_LETTER_SET);
+    expect(keys.filter((letter) => !isBaseLetter(letter))).toEqual(["ئ", "ء", "ؤ", "لا", "ى", "ة"]);
   });
 });
 
