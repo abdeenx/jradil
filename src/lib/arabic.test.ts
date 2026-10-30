@@ -4,7 +4,9 @@ import {
   BASE_LETTERS,
   isBaseLetter,
   isPlayableWord,
+  isTypableLetter,
   KEYPAD_ROWS,
+  keypadStates,
   normalizeArabic,
   scoreGuess,
   toLetters,
@@ -32,21 +34,44 @@ describe("normalizeArabic", () => {
 });
 
 describe("KEYPAD_ROWS", () => {
-  it("follows the Windows Arabic (101) letter rows, mirrored for RTL", () => {
+  it("follows Gboard's Arabic letter rows, listed from the right", () => {
     expect(KEYPAD_ROWS).toEqual([
-      ["ذ", "ض", "ص", "ث", "ق", "ف", "غ", "ع", "ه", "خ", "ح", "ج", "د"],
+      ["ض", "ص", "ث", "ق", "ف", "غ", "ع", "ه", "خ", "ح", "ج"],
       ["ش", "س", "ي", "ب", "ل", "ا", "ت", "ن", "م", "ك", "ط"],
-      ["ئ", "ء", "ؤ", "ر", "لا", "ى", "ة", "و", "ز", "ظ"],
+      ["ذ", "ء", "ؤ", "ر", "ى", "ة", "و", "ز", "ظ", "د"],
     ]);
   });
 
-  it("keeps every base letter exactly once and marks the rest unplayable", () => {
-    const keys = KEYPAD_ROWS.flat();
-    const playable = keys.filter(isBaseLetter);
+  it("keeps every base letter exactly once", () => {
+    const base = KEYPAD_ROWS.flat().filter(isBaseLetter);
 
-    expect(playable).toHaveLength(BASE_LETTERS.length);
-    expect(new Set(playable)).toEqual(BASE_LETTER_SET);
-    expect(keys.filter((letter) => !isBaseLetter(letter))).toEqual(["ئ", "ء", "ؤ", "لا", "ى", "ة"]);
+    expect(base).toHaveLength(BASE_LETTERS.length);
+    expect(new Set(base)).toEqual(BASE_LETTER_SET);
+  });
+
+  it("lets the folded spellings be typed and disables only hamza", () => {
+    const keys = KEYPAD_ROWS.flat();
+
+    expect(keys.filter((letter) => !isBaseLetter(letter) && isTypableLetter(letter))).toEqual([
+      "ؤ",
+      "ى",
+      "ة",
+    ]);
+    expect(keys.filter((letter) => !isTypableLetter(letter))).toEqual(["ء"]);
+  });
+});
+
+describe("keypadStates", () => {
+  it("lights the base key for a letter typed in another spelling", () => {
+    const states = keypadStates([
+      {
+        letters: ["م", "د", "ر", "س", "ة"],
+        states: ["absent", "absent", "absent", "absent", "correct"],
+      },
+    ]);
+
+    expect(states["ه"]).toBe("correct");
+    expect(states["ة"]).toBeUndefined();
   });
 });
 
@@ -54,6 +79,8 @@ describe("isPlayableWord", () => {
   it("accepts exactly five Arabic letters", () => {
     expect(isPlayableWord("مدرسه")).toBe(true);
     expect(isPlayableWord("أسعار")).toBe(true);
+    expect(isPlayableWord("مدرسة")).toBe(true);
+    expect(isPlayableWord("مستوى")).toBe(true);
   });
 
   it("rejects anything that is not five Arabic letters", () => {
@@ -109,6 +136,13 @@ describe("scoreGuess", () => {
   });
 
   it("marks the same letter the same way regardless of how it was typed", () => {
+    expect(scoreGuess("مدرسة", "مدرسه")).toEqual([
+      "correct",
+      "correct",
+      "correct",
+      "correct",
+      "correct",
+    ]);
     expect(scoreGuess("أسعار", "اسعار")).toEqual([
       "correct",
       "correct",

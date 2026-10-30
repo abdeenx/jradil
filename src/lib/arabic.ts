@@ -52,19 +52,19 @@ export const BASE_LETTERS = [
 const BASE_LETTER_SET: ReadonlySet<string> = new Set(BASE_LETTERS);
 
 /**
- * On-screen keypad, laid out like the Arabic (101) keyboard Windows ships,
- * mirrored so the first key sits on the right where an Arabic reader starts.
+ * On-screen keypad, laid out like Gboard's Arabic keyboard, the layout most
+ * players already type on. Rows are listed from the right, where an Arabic
+ * reader starts.
  *
- * All 28 base letters are here. Six keys from the Windows layout (`ئ ء ؤ لا ى
- * ة`) are shown but disabled: the game folds every guess onto base letters, and
- * `لا` is two letters, so none of them can stand on a tile of their own. `ذ`
- * opens the first row because on a PC it lives on the key above that row, and
- * this keypad has no number row to put it on.
+ * Players may press any key that folds onto a base letter — `ى ة ؤ` as well as
+ * the 28 — and the game folds the guess itself before comparing, so typing
+ * `مدرسة` or `مدرسه` is the same guess. `ء` is the one key left disabled: it
+ * folds onto nothing, so no answer can contain it.
  */
 export const KEYPAD_ROWS: readonly (readonly string[])[] = [
-  ["ذ", "ض", "ص", "ث", "ق", "ف", "غ", "ع", "ه", "خ", "ح", "ج", "د"],
+  ["ض", "ص", "ث", "ق", "ف", "غ", "ع", "ه", "خ", "ح", "ج"],
   ["ش", "س", "ي", "ب", "ل", "ا", "ت", "ن", "م", "ك", "ط"],
-  ["ئ", "ء", "ؤ", "ر", "لا", "ى", "ة", "و", "ز", "ظ"],
+  ["ذ", "ء", "ؤ", "ر", "ى", "ة", "و", "ز", "ظ", "د"],
 ];
 
 /** Marks that carry no letter of their own and are dropped before comparing. */
@@ -106,6 +106,11 @@ const LETTER_FOLDS: Readonly<Record<string, string>> = {
   ڵ: "ل",
 };
 
+/** The base letter a single character folds onto, or the character itself. */
+export function foldLetter(character: string): string {
+  return LETTER_FOLDS[character] ?? character;
+}
+
 /** Removes diacritics, tatweel and zero-width marks. */
 export function stripMarks(input: string): string {
   return input.replace(DIACRITICS_AND_TATWEEL, "");
@@ -117,7 +122,7 @@ export function normalizeArabic(input: string): string {
   let output = "";
   for (const character of stripped) {
     if (character === " ") continue;
-    output += LETTER_FOLDS[character] ?? character;
+    output += foldLetter(character);
   }
   return output;
 }
@@ -143,6 +148,11 @@ export function isBaseLetter(character: string): boolean {
   return BASE_LETTER_SET.has(character);
 }
 
+/** True for a single character a player may type: a base letter or a spelling of one. */
+export function isTypableLetter(character: string): boolean {
+  return isBaseLetter(foldLetter(character));
+}
+
 /** True when the text is a well-formed guess: five Arabic letters, nothing else. */
 export function isPlayableWord(input: string): boolean {
   const letters = toLetters(input);
@@ -163,7 +173,7 @@ export function toWordLetters(input: string): WordLetter[] {
   const display = [...stripMarks(input.normalize("NFC"))].filter((c) => c !== " ");
   return display.map((character) => ({
     display: character,
-    canonical: LETTER_FOLDS[character] ?? character,
+    canonical: foldLetter(character),
   }));
 }
 
@@ -204,8 +214,9 @@ export function scoreGuess(guess: string, answer: string): LetterState[] {
 
 /**
  * Collapses every guess into the best state seen for each letter, for the
- * on-screen keypad. A letter that has never been guessed is simply absent from
- * the map.
+ * on-screen keypad. Rows keep the letters as typed, so they are folded here: an
+ * `ة` in a guess lights the `ه` key. A letter that has never been guessed is
+ * simply absent from the map.
  */
 export function keypadStates(
   guesses: readonly { letters: readonly string[]; states: readonly LetterState[] }[],
@@ -214,7 +225,8 @@ export function keypadStates(
   const rank: Record<LetterState, number> = { absent: 1, present: 2, correct: 3 };
 
   for (const guess of guesses) {
-    guess.letters.forEach((letter, index) => {
+    guess.letters.forEach((typed, index) => {
+      const letter = foldLetter(typed);
       const state = guess.states[index];
       if (!state) return;
       const current = result[letter];

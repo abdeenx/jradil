@@ -355,12 +355,12 @@ the stored word has `أ` counts as correct. Letter marking runs on the folded
 letters, so a repeated letter is only marked as often as it truly occurs in the
 answer.
 
-The tiles show only the 28 base letters. The on-screen keypad follows the
-letter rows of the Windows Arabic (101) layout — `ض…د`, `ش…ط`, `ئ…ظ` — mirrored
-so the first key is on the right. The six Windows keys that are not playable
-here (`ئ ء ؤ لا ى ة`) are shown faded and disabled, so the layout reads right
-while only the 28 base letters can be pressed. `ذ`, which a PC puts on the key
-above the first row, opens that row instead.
+The on-screen keypad follows Gboard's Arabic layout — `ض…ج`, `ش…ط`, `ذ…د` —
+with backspace closing the last letter row as on a phone. Players can press
+`ى ة ؤ` (and type any other foldable spelling on a physical keyboard); the
+letter is shown as typed and the game folds it when scoring, so a key like `ة`
+takes the colour of `ه`. `ء` folds onto no base letter, so no answer can contain
+it; its key is shown faded and disabled to keep the layout's shape.
 
 ## Deployment
 

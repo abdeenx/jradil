@@ -11,7 +11,7 @@ import { ResultDialog } from "#/components/ResultDialog.tsx";
 import { SiteHeader } from "#/components/SiteHeader.tsx";
 import { useDailyGame } from "#/hooks/useDailyGame.ts";
 import { usePushSubscription } from "#/hooks/usePushSubscription.ts";
-import { isBaseLetter, toLetters } from "#/lib/arabic.ts";
+import { isTypableLetter } from "#/lib/arabic.ts";
 import { APP_NAME_AR, NEXT_WORD_LABEL, TAGLINE_AR } from "#/lib/config.ts";
 import { socialMeta } from "#/lib/social.ts";
 import { shortDateKey } from "#/lib/sudan-time.ts";
@@ -65,10 +65,11 @@ function GamePage() {
         return;
       }
 
-      const letters = toLetters(event.key);
-      if (letters.length === 1 && isBaseLetter(letters[0])) {
+      // Kept as typed: the game folds `ة`, `أ` and friends when it scores.
+      const letter = event.key.normalize("NFC");
+      if (isTypableLetter(letter)) {
         event.preventDefault();
-        game.pushLetter(letters[0]);
+        game.pushLetter(letter);
       }
     }
 
