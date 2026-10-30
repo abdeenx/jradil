@@ -5,7 +5,8 @@
  *
  * 1. **Normalisation.** Players type `ا` where the stored word has `أ`, or `ه`
  *    where it has `ة`. Both spellings are the same letter to a reader, so the
- *    game folds them before comparing. Sudanese dialect also writes the /g/
+ *    game folds them before comparing. A bare `ء` folds onto `ا`, its usual
+ *    seat. Sudanese dialect also writes the /g/
  *    and /v/ sounds with letters that are uncommon in Standard Arabic
  *    (`ڨ`, `گ`, `ڤ`); those fold onto their closest Standard Arabic letter.
  *
@@ -53,13 +54,12 @@ const BASE_LETTER_SET: ReadonlySet<string> = new Set(BASE_LETTERS);
 
 /**
  * On-screen keypad, laid out like Gboard's Arabic keyboard, the layout most
- * players already type on. Rows are listed from the right, where an Arabic
- * reader starts.
+ * players already type on. Rows are listed left to right as they appear on the
+ * phone, `ض` in the top-left corner.
  *
- * Players may press any key that folds onto a base letter — `ى ة ؤ` as well as
- * the 28 — and the game folds the guess itself before comparing, so typing
- * `مدرسة` or `مدرسه` is the same guess. `ء` is the one key left disabled: it
- * folds onto nothing, so no answer can contain it.
+ * Every key is playable. The 28 base letters are here, plus `ء ؤ ى ة`, which
+ * are typed as shown and folded by the game before comparing, so typing
+ * `مدرسة` or `مدرسه` is the same guess.
  */
 export const KEYPAD_ROWS: readonly (readonly string[])[] = [
   ["ض", "ص", "ث", "ق", "ف", "غ", "ع", "ه", "خ", "ح", "ج"],
@@ -81,6 +81,8 @@ const LETTER_FOLDS: Readonly<Record<string, string>> = {
   ٲ: "ا",
   ٳ: "ا",
   ٵ: "ا",
+  // bare hamza → alef
+  ء: "ا",
   // taa marbuta → haa
   ة: "ه",
   ۀ: "ه",

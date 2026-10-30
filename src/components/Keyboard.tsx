@@ -1,5 +1,5 @@
 import { Bucket } from "#/components/Bucket.tsx";
-import { foldLetter, isTypableLetter, KEYPAD_ROWS, type LetterState } from "#/lib/arabic.ts";
+import { foldLetter, KEYPAD_ROWS, type LetterState } from "#/lib/arabic.ts";
 
 /** The widest row decides the key size; the short rows are centred under it. */
 const COLUMNS = Math.max(...KEYPAD_ROWS.map((row) => row.length));
@@ -12,11 +12,10 @@ const COLUMNS = Math.max(...KEYPAD_ROWS.map((row) => row.length));
  * best-known state improves — the CSS in `styles.css` delays those
  * transitions so the keys follow the board's reveal rather than race it.
  *
- * Rows follow Gboard's Arabic layout, with backspace closing the last letter
- * row as it does on a phone. Keys like `ة` and `ى` are typed as shown and
- * folded by the game, so each one shares the state of the letter it folds onto.
- * `ء` folds onto nothing, so it stays visible but disabled to keep the layout's
- * shape.
+ * Rows follow Gboard's Arabic layout exactly as it sits on the phone: laid out
+ * left to right with `ض` in the top-left corner, and backspace closing the last
+ * letter row on the right. Keys like `ة` and `ء` are typed as shown and folded
+ * by the game, so each one shares the state of the letter it folds onto.
  */
 export function Keyboard({
   keyStates,
@@ -39,47 +38,28 @@ export function Keyboard({
 
         return (
           <div key={row.join("")} className="flex justify-center">
+            {/* A phone keyboard is not mirrored for Arabic, so neither is this one. */}
             <div
-              dir="rtl"
+              dir="ltr"
               className="flex gap-0.5 sm:gap-1"
               style={{ width: `${(keys / COLUMNS) * 100}%` }}
             >
-              {row.map((letter) => {
-                const playable = isTypableLetter(letter);
-
-                return (
-                  <button
-                    key={letter}
-                    type="button"
-                    disabled={disabled || !playable}
-                    aria-label={
-                      playable ? `الحرف ${letter}` : `${letter} — حرف لا يدخل في كلمات اللعبة`
-                    }
-                    title={playable ? undefined : "لا تحتوي كلمات اللعبة على هذا الحرف"}
-                    onClick={() => onLetter(letter)}
-                    className={`flex h-12 min-w-0 flex-1 items-center justify-center rounded-md transition-colors ${
-                      playable
-                        ? "hover:bg-base-200 active:bg-base-300 disabled:opacity-60"
-                        : "cursor-not-allowed"
-                    }`}
-                  >
-                    {playable ? (
-                      <Bucket
-                        letter={letter}
-                        result={keyStates[foldLetter(letter)]}
-                        className="h-11 w-full"
-                      />
-                    ) : (
-                      <span
-                        aria-hidden="true"
-                        className="text-base-content/25 flex h-11 w-full items-center justify-center text-sm leading-none font-bold"
-                      >
-                        {letter}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+              {row.map((letter) => (
+                <button
+                  key={letter}
+                  type="button"
+                  disabled={disabled}
+                  aria-label={`الحرف ${letter}`}
+                  onClick={() => onLetter(letter)}
+                  className="hover:bg-base-200 active:bg-base-300 flex h-12 min-w-0 flex-1 items-center justify-center rounded-md transition-colors disabled:opacity-60"
+                >
+                  <Bucket
+                    letter={letter}
+                    result={keyStates[foldLetter(letter)]}
+                    className="h-11 w-full"
+                  />
+                </button>
+              ))}
 
               {hasBackspace ? (
                 <button

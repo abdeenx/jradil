@@ -347,7 +347,7 @@ load, so a message sent late in the evening is still accurate.
 ## Notes on Arabic
 
 `src/lib/arabic.ts` folds the spelling differences an Arabic reader ignores —
-`أ إ آ ا`, `ة ه`, `ى ي`, `ؤ و` — and the letters Sudanese dialect uses for /g/
+`أ إ آ ء ا`, `ة ه`, `ى ي`, `ؤ و` — and the letters Sudanese dialect uses for /g/
 and /v/ (`ڨ گ ڤ پ چ`). Diacritics, tatweel and zero-width marks are removed.
 
 Both the guess and the answer are folded before comparison, so typing `ا` where
@@ -355,12 +355,11 @@ the stored word has `أ` counts as correct. Letter marking runs on the folded
 letters, so a repeated letter is only marked as often as it truly occurs in the
 answer.
 
-The on-screen keypad follows Gboard's Arabic layout — `ض…ج`, `ش…ط`, `ذ…د` —
-with backspace closing the last letter row as on a phone. Players can press
-`ى ة ؤ` (and type any other foldable spelling on a physical keyboard); the
-letter is shown as typed and the game folds it when scoring, so a key like `ة`
-takes the colour of `ه`. `ء` folds onto no base letter, so no answer can contain
-it; its key is shown faded and disabled to keep the layout's shape.
+The on-screen keypad follows Gboard's Arabic layout, left to right as on the
+phone — `ض…ج`, `ش…ط`, `ذ…د` — with backspace closing the last letter row.
+Every key is playable: `ء ؤ ى ة` (and any other foldable spelling typed on a
+physical keyboard) are shown as typed and folded when scoring, so a key like
+`ة` takes the colour of `ه`. A bare `ء` folds onto `ا`.
 
 ## Deployment
 

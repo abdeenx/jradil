@@ -19,6 +19,7 @@ describe("normalizeArabic", () => {
     expect(normalizeArabic("أسعار")).toBe("اسعار");
     expect(normalizeArabic("إبرة")).toBe("ابره");
     expect(normalizeArabic("مدرسة")).toBe("مدرسه");
+    expect(normalizeArabic("سماء")).toBe("سماا");
   });
 
   it("folds the letters Sudanese dialect uses for g and v", () => {
@@ -34,7 +35,7 @@ describe("normalizeArabic", () => {
 });
 
 describe("KEYPAD_ROWS", () => {
-  it("follows Gboard's Arabic letter rows, listed from the right", () => {
+  it("follows Gboard's Arabic letter rows, listed left to right", () => {
     expect(KEYPAD_ROWS).toEqual([
       ["ض", "ص", "ث", "ق", "ف", "غ", "ع", "ه", "خ", "ح", "ج"],
       ["ش", "س", "ي", "ب", "ل", "ا", "ت", "ن", "م", "ك", "ط"],
@@ -49,15 +50,11 @@ describe("KEYPAD_ROWS", () => {
     expect(new Set(base)).toEqual(BASE_LETTER_SET);
   });
 
-  it("lets the folded spellings be typed and disables only hamza", () => {
+  it("makes every key playable, folding the extra spellings", () => {
     const keys = KEYPAD_ROWS.flat();
 
-    expect(keys.filter((letter) => !isBaseLetter(letter) && isTypableLetter(letter))).toEqual([
-      "ؤ",
-      "ى",
-      "ة",
-    ]);
-    expect(keys.filter((letter) => !isTypableLetter(letter))).toEqual(["ء"]);
+    expect(keys.every(isTypableLetter)).toBe(true);
+    expect(keys.filter((letter) => !isBaseLetter(letter))).toEqual(["ء", "ؤ", "ى", "ة"]);
   });
 });
 
