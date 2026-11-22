@@ -72,13 +72,14 @@ vp dev
 
 ### Environment
 
-| Variable               | Required     | Purpose                                                                                                                 |
-| ---------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `MONGODB_URI`          | yes          | Connection string. Add a database name to it — a URI without one makes MongoDB use its default `test` database.         |
-| `MONGODB_DB`           | no           | Pins the database name, overriding the URI.                                                                             |
-| `ADMIN_PASSWORD`       | for `/admin` | The operator's password. Without it the dashboard refuses to open rather than falling back to a default.                |
-| `ADMIN_SESSION_SECRET` | no           | Signing key for the session cookie. Defaults to `ADMIN_PASSWORD`.                                                       |
-| `VAPID_SUBJECT`        | no           | Contact the push services see. Defaults to `APP_URL` when it is `https`; see [Daily notification](#daily-notification). |
+| Variable               | Required     | Purpose                                                                                                                                               |
+| ---------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MONGODB_URI`          | yes          | Connection string. Add a database name to it — a URI without one makes MongoDB use its default `test` database.                                       |
+| `MONGODB_DB`           | no           | Pins the database name, overriding the URI.                                                                                                           |
+| `ADMIN_PASSWORD`       | for `/admin` | The operator's password. Without it the dashboard refuses to open rather than falling back to a default.                                              |
+| `ADMIN_SESSION_SECRET` | no           | Signing key for the session cookie. Defaults to `ADMIN_PASSWORD`.                                                                                     |
+| `LEGACY_HOSTS`         | no           | Old host names, comma-separated, whose links keep their card but send browsers to `APP_URL`; see [Moving to a new address](#moving-to-a-new-address). |
+| `VAPID_SUBJECT`        | no           | Contact the push services see. Defaults to `APP_URL` when it is `https`; see [Daily notification](#daily-notification).                               |
 
 Nothing else. The database needs no manual setup: the collection and its indexes
 are created on first use, so the whole product can be operated without opening
@@ -319,6 +320,27 @@ and the file cannot disagree; a test reads the size back out of the PNG.
 `APP_URL` has to be set for previews to work: platforms will not resolve a relative
 `og:image`, so the tags use it to build an absolute address. Without it the image is
 emitted as a path, which some clients still resolve and the rest ignore.
+
+### Moving to a new address
+
+Point the old domain at the same deployment, set `APP_URL` to the new address, and list
+the old host in `LEGACY_HOSTS` (for example `LEGACY_HOSTS=jradil.abdeenx.com`). Then, on
+the old host:
+
+- **Browsers** get a `301` to the same path on `APP_URL`, so old links and bookmarks land
+  on the new address, and search engines move their index there.
+- **Link-preview crawlers** (WhatsApp, Facebook, X, Telegram, Slack, Discord, LinkedIn and
+  others, matched by user agent in `src/lib/legacy-host.ts`) are still served the game
+  page, with `og:url` and the card image on the old host, so links already shared unfurl
+  exactly as before. A crawler missing from that list follows the redirect and reads the
+  same card from the new address.
+- **Files and the API** (`/og-image.png`, icons, `/sw.js`, built assets, `/api/**`) are
+  served as usual, so the old card image stays reachable and players subscribed to the
+  daily notification on the old address keep receiving it; tapping it opens the old
+  address, which forwards them.
+
+Everything else — the «شارك نتيجتك» text, sign-in return addresses, the push contact —
+uses `APP_URL`, i.e. the new address.
 
 ## Sharing a result
 

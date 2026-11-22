@@ -27,7 +27,7 @@ export const Route = createFileRoute("/")({
    * mechanism for reading the environment, and identical on the server and in
    * the browser — the tags a crawler reads are the ones rendered here.
    */
-  head: ({ loaderData }) => ({ meta: socialMeta(loaderData?.appUrl ?? null) }),
+  head: ({ loaderData }) => ({ meta: socialMeta(loaderData?.previewUrl ?? null) }),
   component: GamePage,
 });
 

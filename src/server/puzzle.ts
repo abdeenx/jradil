@@ -12,11 +12,13 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
+import { getRequestHeaders } from "@tanstack/react-start/server";
 import { z } from "zod";
 
 import { isPlayableWord, scoreGuess, toWordLetters, type LetterState } from "#/lib/arabic.ts";
 import { MAX_ATTEMPTS, WORD_LETTER_COUNT } from "#/lib/config.ts";
 import { optionalEnv } from "#/lib/env.ts";
+import { legacyHosts, matchLegacyHost, requestHost } from "#/lib/legacy-host.ts";
 import { signProgress, verifyProgress } from "#/lib/progress.ts";
 import { dayEndUtc, dayStartUtc, isDateKey, sudanDateKey, type DateKey } from "#/lib/sudan-time.ts";
 import { recordUnknownWord } from "#/lib/unknown-words.ts";
@@ -45,6 +47,12 @@ export type PuzzlePayload = {
    * case the share text simply leaves the link out.
    */
   appUrl: string | null;
+  /**
+   * The address the social card names. `appUrl`, except on an old host kept
+   * for its existing links (`LEGACY_HOSTS`), where the card keeps naming that
+   * old host so a link shared from it unfurls exactly as it always did.
+   */
+  previewUrl: string | null;
   state: PuzzleState;
   /** The operator has the daily push notification switched on, so it may be offered. */
   notifications: boolean;
@@ -84,9 +92,15 @@ function puzzlePayload(
     endsAt: dayEndUtc(dateKey).toISOString(),
     msRemaining: Math.max(0, dayEndUtc(dateKey).getTime() - now.getTime()),
     appUrl: optionalEnv("APP_URL"),
+    previewUrl: previewUrl(),
     state,
     notifications,
   };
+}
+
+function previewUrl(): string | null {
+  const legacy = matchLegacyHost(requestHost(getRequestHeaders()), legacyHosts());
+  return legacy ? `https://${legacy}` : optionalEnv("APP_URL");
 }
 
 /** Everything the board needs before the first guess, and nothing that spoils it. */

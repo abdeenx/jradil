@@ -48,6 +48,10 @@ const config = defineConfig({
     nitro({
       rollupConfig: { external: [/^@sentry\//] },
       plugins: ["./src/server/plugins/warm-up.ts", "./src/server/plugins/notifications.ts"],
+      handlers: [
+        // Browsers on an old address go to APP_URL; crawlers still get its card.
+        { route: "/**", middleware: true, handler: "./src/server/middleware/legacy-host.ts" },
+      ],
       routeRules: {
         "/**": { headers: SECURITY_HEADERS },
         "/admin": { headers: NO_STORE },
