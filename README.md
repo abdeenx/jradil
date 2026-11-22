@@ -327,13 +327,16 @@ Point the old domain at the same deployment, set `APP_URL` to the new address, a
 the old host in `LEGACY_HOSTS` (for example `LEGACY_HOSTS=jradil.abdeenx.com`). Then, on
 the old host:
 
-- **Browsers** get a `301` to the same path on `APP_URL`, so old links and bookmarks land
-  on the new address, and search engines move their index there.
-- **Link-preview crawlers** (WhatsApp, Facebook, X, Telegram, Slack, Discord, LinkedIn and
-  others, matched by user agent in `src/lib/legacy-host.ts`) are still served the game
-  page, with `og:url` and the card image on the old host, so links already shared unfurl
-  exactly as before. A crawler missing from that list follows the redirect and reads the
-  same card from the new address.
+- **A browser opening a page** — recognised by the `Sec-Fetch-Mode: navigate` and
+  `Sec-Fetch-Dest: document` headers every current browser sends — gets a `301` to the
+  same path on `APP_URL`, so old links and bookmarks land on the new address.
+- **Everything else asking for a page** is served the game page, with `og:url` and the
+  card image on the old host, so links already shared unfurl exactly as before. This
+  covers preview fetchers that pretend to be a browser — WhatsApp's desktop and web
+  apps do — and the user agent alone could not tell them apart. The page starts with a
+  one-line script that forwards to the new address, which crawlers do not run but a
+  browser too old to send those headers does. Known crawlers (matched by user agent in
+  `src/lib/legacy-host.ts`) get the page without that script.
 - **Files and the API** (`/og-image.png`, icons, `/sw.js`, built assets, `/api/**`) are
   served as usual, so the old card image stays reachable and players subscribed to the
   daily notification on the old address keep receiving it; tapping it opens the old
